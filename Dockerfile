@@ -15,20 +15,17 @@ COPY package.json pnpm-lock.yaml ./
 # Copy the Prisma schema folder
 COPY prisma ./prisma/
 
-# Force pnpm to allow scripts (required for Prisma engines)
-RUN pnpm config set ignore-scripts false
+# Install ALL dependencies ignoring scripts to bypass pnpm v9 security block
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Install ALL dependencies
-RUN pnpm install --frozen-lockfile
-
-# Generate the Prisma Client
-RUN pnpm dlx prisma generate
+# Manually generate Prisma Client using npx (safest execution)
+RUN npx prisma generate
 
 # Copy the rest of the application code
 COPY . .
 
 # Compile the NestJS application into the /dist folder
-RUN pnpm run build
+RUN npm run build
 
 # ---------------------------------------------------
 # Stage 2: Production Environment
@@ -47,14 +44,11 @@ COPY package.json pnpm-lock.yaml ./
 # Copy the Prisma schema folder again
 COPY prisma ./prisma/
 
-# Force pnpm to allow scripts (required for Prisma engines)
-RUN pnpm config set ignore-scripts false
-
-# Install ONLY production dependencies to keep the image ultra-light
-RUN pnpm install --frozen-lockfile --prod
+# Install ONLY production dependencies ignoring scripts
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Generate the Prisma Client for the production environment
-RUN pnpm dlx prisma generate
+RUN npx prisma generate
 
 # Copy the compiled code from the builder stage
 COPY --from=builder /app/dist ./dist
@@ -63,4 +57,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3000
 
 # Run pending migrations against Supabase, then start the application
-CMD ["sh", "-c", "pnpm dlx prisma migrate deploy && node dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
