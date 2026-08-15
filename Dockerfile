@@ -57,4 +57,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3000
 
 # Run pending migrations against Supabase with version 6, then start the application
-CMD ["sh", "-c", "npx prisma@6 migrate deploy && node dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma@6 migrate deploy && node dist/main.js"]
