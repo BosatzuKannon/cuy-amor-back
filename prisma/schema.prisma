@@ -1,0 +1,290 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum InteractionType {
+  LIKE
+  PASS
+  SUPER_LIKE
+}
+
+enum TransactionType {
+  COIN_RECHARGE
+  GIFT_SENT
+  PRIORITY_MESSAGE
+  BOOST_PURCHASE
+  REFERRAL_COMMISSION
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                   String       @id @db.Uuid
+  email                String       @unique
+  googleId             String?      @unique
+  firstName            String
+  lastName             String?
+  birthDate            DateTime?
+  gender               Gender?
+  bio                  String?
+  city                 String?      @default("Pasto")
+  latitude             Float?
+  longitude            Float?
+  coinsBalance         Int          @default(0)
+  cashBalanceInCents   Int          @default(0)
+  isVerified           Boolean      @default(false)
+  boostedUntil         DateTime?
+  referralCode         String?      @unique
+  referredById         String?      @db.Uuid
+  referredBy           User?        @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals            User[]       @relation("UserReferrals")
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  preferences          UserPreference?
+  photos               Photo[]
+  devices              Device[]
+  transactions         Transaction[]
+  payoutRequests       PayoutRequest[]
+  verificationRequests VerificationRequest[]
+  givenInteractions    Interaction[] @relation("GivenInteractions")
+  receivedInteractions Interaction[] @relation("ReceivedInteractions")
+  matchesAsUser1       Match[]       @relation("MatchUser1")
+  matchesAsUser2       Match[]       @relation("MatchUser2")
+  messagesSent         Message[]
+  blocksGiven          BlockedUser[] @relation("BlockingUser")
+  blocksReceived       BlockedUser[] @relation("BlockedUser")
+  reportsMade          UserReport[]  @relation("ReporterUser")
+  reportsReceived      UserReport[]  @relation("ReportedUser")
+  giftsSent            UserGift[]    @relation("SentGifts")
+  giftsReceived        UserGift[]    @relation("ReceivedGifts")
+
+  @@index([referralCode])
+}
+
+model Photo {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String
+  order     Int      @default(0)
+  isProfile Boolean  @default(false)
+  createdAt DateTime @default(now())
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Interaction {
+  id         String          @id @default(uuid()) @db.Uuid
+  type       InteractionType
+  createdAt  DateTime        @default(now())
+  fromUserId String          @db.Uuid
+  fromUser   User            @relation("GivenInteractions", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String          @db.Uuid
+  toUser     User            @relation("ReceivedInteractions", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model Match {
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user1Id   String    @db.Uuid
+  user1     User      @relation("MatchUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id   String    @db.Uuid
+  user2     User      @relation("MatchUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model Message {
+  id          String   @id @default(uuid()) @db.Uuid
+  content     String
+  isRead      Boolean  @default(false)
+  isPriority  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  matchId     String?  @db.Uuid
+  match       Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId    String   @db.Uuid
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String?  @db.Uuid
+
+  @@index([matchId])
+  @@index([senderId])
+}
+
+model VirtualGift {
+  id            String     @id @default(uuid()) @db.Uuid
+  name          String
+  iconUrl       String
+  coinCost      Int
+  cashValueCops Int
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  userGifts     UserGift[]
+}
+
+model UserGift {
+  id         String      @id @default(uuid()) @db.Uuid
+  createdAt  DateTime    @default(now())
+  giftId     String      @db.Uuid
+  gift       VirtualGift @relation(fields: [giftId], references: [id], onDelete: Restrict)
+  senderId   String      @db.Uuid
+  sender     User        @relation("SentGifts", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String      @db.Uuid
+  receiver   User        @relation("ReceivedGifts", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId])
+}
+
+model Transaction {
+  id                 String            @id @default(uuid()) @db.Uuid
+  reference          String            @unique
+  wompiTransactionId String?           @unique
+  amountInCents      Int
+  coinsAmount        Int?
+  status             TransactionStatus @default(PENDING)
+  type               TransactionType   @default(COIN_RECHARGE)
+  paymentMethodType  String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  userId             String            @db.Uuid
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PayoutRequest {
+  id             String       @id @default(uuid()) @db.Uuid
+  amountInCents  Int
+  bankName       String
+  accountNumber  String
+  accountHolder  String
+  status         PayoutStatus @default(PENDING)
+  adminNotes     String?
+  payoutProofUrl String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model BlockedUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  reason    String?
+  createdAt DateTime @default(now())
+  blockerId String   @db.Uuid
+  blocker   User     @relation("BlockingUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String   @db.Uuid
+  blocked   User     @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+}
+
+model VerificationRequest {
+  id        String             @id @default(uuid()) @db.Uuid
+  selfieUrl String
+  status    VerificationStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  userId    String             @db.Uuid
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserReport {
+  id         String   @id @default(uuid()) @db.Uuid
+  reason     String
+  details    String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  reporterId String   @db.Uuid
+  reporter   User     @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedId String   @db.Uuid
+  reported   User     @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([reportedId])
+}
+
+model UserPreference {
+  id                 String   @id @default(uuid()) @db.Uuid
+  pushNotifications  Boolean  @default(true)
+  emailNotifications Boolean  @default(true)
+  matchAlerts        Boolean  @default(true)
+  messageAlerts      Boolean  @default(true)
+  showLocation       Boolean  @default(true)
+  invisibleMode      Boolean  @default(false)
+  maxDistanceKm      Int      @default(50)
+  minAgePreference   Int      @default(18)
+  maxAgePreference   Int      @default(99)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  userId             String   @unique @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Device {
+  id        String   @id @default(uuid()) @db.Uuid
+  pushToken String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SystemConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  key              String   @unique
+  minVersionCode   Int      @default(1)
+  appStatus        String   @default("ACTIVE")
+  appStatusMessage String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
