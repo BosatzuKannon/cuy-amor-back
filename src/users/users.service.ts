@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
+import { SyncUserDto } from '../auth/sync-user.dto';
 import { AddPhotosDto } from './dto/photo.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 
@@ -40,6 +41,71 @@ export class UserService {
         error.code === 'P2002'
       ) {
         // Another request may have created the record concurrently.
+        return this.prisma.user.findUnique({
+          where: { id: authUser.userId },
+        });
+      }
+      throw error;
+    }
+  }
+
+  async syncUser(authUser: AuthenticatedUser, dto: SyncUserDto) {
+    const email = dto.email ?? authUser.email ?? '';
+
+    const existing = await this.prisma.user.findUnique({
+      where: { id: authUser.userId },
+    });
+
+    if (existing) {
+      const data: Prisma.UserUpdateInput = {};
+
+      if (dto.googleId && !existing.googleId) {
+        data.googleId = dto.googleId;
+      }
+      if (email && existing.email !== email) {
+        data.email = email;
+      }
+
+      if (!data.googleId && !data.email) {
+        return existing;
+      }
+
+      try {
+        const updated = await this.prisma.user.update({
+          where: { id: authUser.userId },
+          data,
+        });
+        return { ...existing, ...updated };
+      } catch (error) {
+        this.handlePrismaError(error, 'No se pudo sincronizar el usuario');
+      }
+    }
+
+    const fullName = [dto.firstName, dto.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const derivedName = fullName || email.split('@')[0] || 'Usuario';
+    const [firstName = 'Usuario', ...rest] = derivedName.split(' ');
+
+    try {
+      return await this.prisma.user.create({
+        data: {
+          id: authUser.userId,
+          email,
+          googleId: dto.googleId ?? null,
+          firstName,
+          lastName: rest.length ? rest.join(' ') : null,
+          preferences: {
+            create: {},
+          },
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         return this.prisma.user.findUnique({
           where: { id: authUser.userId },
         });
