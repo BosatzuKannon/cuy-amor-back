@@ -39,10 +39,10 @@ jobs:
       run: npx prisma generate
 
     - name: Run Linter
-      run: pnpm run lint
+      run: npm run lint
 
     - name: Run Unit Tests
-      run: pnpm run test --passWithNoTests
+      run: npm run test -- --passWithNoTests
 
     - name: Build Application
-      run: pnpm run build
+      run: npm run build
