@@ -19,7 +19,7 @@ COPY prisma ./prisma/
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Manually generate Prisma Client using npx (safest execution)
-RUN npx prisma generate
+RUN npx prisma@6 generate
 
 # Copy the rest of the application code
 COPY . .
@@ -47,8 +47,8 @@ COPY prisma ./prisma/
 # Install ONLY production dependencies ignoring scripts
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-# Generate the Prisma Client for the production environment
-RUN npx prisma generate
+# Generate the Prisma Client using strictly version 6 to avoid breaking changes
+RUN npx prisma@6 generate
 
 # Copy the compiled code from the builder stage
 COPY --from=builder /app/dist ./dist
@@ -56,5 +56,5 @@ COPY --from=builder /app/dist ./dist
 # Expose the default NestJS port
 EXPOSE 3000
 
-# Run pending migrations against Supabase, then start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
+# Run pending migrations against Supabase with version 6, then start the application
+CMD ["sh", "-c", "npx prisma@6 migrate deploy && node dist/src/main.js"]
