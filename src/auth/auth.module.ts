@@ -8,7 +8,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
-  imports: [ConfigModule, JwtModule.register({}), UserModule],
+  imports: [ConfigModule.forRoot(), JwtModule.register({}), UserModule],
   controllers: [AuthController],
   providers: [JwtStrategy, JwtAuthGuard],
   exports: [JwtStrategy, JwtAuthGuard],
