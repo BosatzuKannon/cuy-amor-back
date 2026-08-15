@@ -33,9 +33,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Install dependencies
-      run: |
-        pnpm config set ignore-scripts false
-        pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile
 
     - name: Generate Prisma Client
       run: pnpm dlx prisma generate
