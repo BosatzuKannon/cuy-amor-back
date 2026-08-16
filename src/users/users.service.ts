@@ -12,11 +12,16 @@ import { CompleteProfileDto } from './dto/complete-profile.dto';
 
 @Injectable()
 export class UserService {
+  private readonly userInclude = {
+    photos: { orderBy: { order: 'asc' as const } },
+  } as const;
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getOrCreateUser(authUser: AuthenticatedUser) {
     const existing = await this.prisma.user.findUnique({
       where: { id: authUser.userId },
+      include: this.userInclude,
     });
 
     if (existing) {
@@ -34,6 +39,7 @@ export class UserService {
             create: {},
           },
         },
+        include: this.userInclude,
       });
     } catch (error) {
       if (
@@ -43,6 +49,7 @@ export class UserService {
         // Another request may have created the record concurrently.
         return this.prisma.user.findUnique({
           where: { id: authUser.userId },
+          include: this.userInclude,
         });
       }
       throw error;
@@ -123,6 +130,9 @@ export class UserService {
         data: {
           birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
           gender: dto.gender,
+          interestedIn: dto.interestedIn,
+          relationshipGoal: dto.relationshipGoal,
+          hobbies: dto.hobbies,
           bio: dto.bio,
           city: dto.city ?? 'Pasto',
           latitude: dto.latitude,

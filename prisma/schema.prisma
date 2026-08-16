@@ -16,6 +16,19 @@ enum Gender {
   OTHER
 }
 
+enum InterestedIn {
+  WOMEN
+  MEN
+  BOTH
+}
+
+enum RelationshipGoal {
+  CASUAL
+  FRIENDSHIP
+  RELATIONSHIP
+  CHAT
+}
+
 enum InteractionType {
   LIKE
   PASS
@@ -51,27 +64,30 @@ enum VerificationStatus {
 }
 
 model User {
-  id                   String       @id @db.Uuid
-  email                String       @unique
-  googleId             String?      @unique
-  firstName            String
-  lastName             String?
-  birthDate            DateTime?
-  gender               Gender?
-  bio                  String?
-  city                 String?      @default("Pasto")
-  latitude             Float?
-  longitude            Float?
-  coinsBalance         Int          @default(0)
-  cashBalanceInCents   Int          @default(0)
-  isVerified           Boolean      @default(false)
-  boostedUntil         DateTime?
-  referralCode         String?      @unique
-  referredById         String?      @db.Uuid
-  referredBy           User?        @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals            User[]       @relation("UserReferrals")
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  id                 String            @id @db.Uuid
+  email              String            @unique
+  googleId           String?           @unique
+  firstName          String
+  lastName           String?
+  birthDate          DateTime?
+  gender             Gender?
+  interestedIn       InterestedIn?
+  relationshipGoal   RelationshipGoal?
+  hobbies            String[]          @default([])
+  bio                String?
+  city               String?           @default("Pasto")
+  latitude           Float?
+  longitude          Float?
+  coinsBalance       Int               @default(0)
+  cashBalanceInCents Int               @default(0)
+  isVerified         Boolean           @default(false)
+  boostedUntil       DateTime?
+  referralCode       String?           @unique
+  referredById       String?           @db.Uuid
+  referredBy         User?             @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          User[]            @relation("UserReferrals")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   preferences          UserPreference?
   photos               Photo[]
@@ -79,17 +95,17 @@ model User {
   transactions         Transaction[]
   payoutRequests       PayoutRequest[]
   verificationRequests VerificationRequest[]
-  givenInteractions    Interaction[] @relation("GivenInteractions")
-  receivedInteractions Interaction[] @relation("ReceivedInteractions")
-  matchesAsUser1       Match[]       @relation("MatchUser1")
-  matchesAsUser2       Match[]       @relation("MatchUser2")
+  givenInteractions    Interaction[]         @relation("GivenInteractions")
+  receivedInteractions Interaction[]         @relation("ReceivedInteractions")
+  matchesAsUser1       Match[]               @relation("MatchUser1")
+  matchesAsUser2       Match[]               @relation("MatchUser2")
   messagesSent         Message[]
-  blocksGiven          BlockedUser[] @relation("BlockingUser")
-  blocksReceived       BlockedUser[] @relation("BlockedUser")
-  reportsMade          UserReport[]  @relation("ReporterUser")
-  reportsReceived      UserReport[]  @relation("ReportedUser")
-  giftsSent            UserGift[]    @relation("SentGifts")
-  giftsReceived        UserGift[]    @relation("ReceivedGifts")
+  blocksGiven          BlockedUser[]         @relation("BlockingUser")
+  blocksReceived       BlockedUser[]         @relation("BlockedUser")
+  reportsMade          UserReport[]          @relation("ReporterUser")
+  reportsReceived      UserReport[]          @relation("ReportedUser")
+  giftsSent            UserGift[]            @relation("SentGifts")
+  giftsReceived        UserGift[]            @relation("ReceivedGifts")
 
   @@index([referralCode])
 }

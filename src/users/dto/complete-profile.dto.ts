@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEnum,
   IsISO8601,
   IsNumber,
@@ -10,11 +12,13 @@ import {
 } from 'class-validator';
 
 import { IsMinimumAge } from '../../common/validators/is-minimum-age';
-import { Gender } from '@prisma/client';
+import { Gender, InterestedIn, RelationshipGoal } from '@prisma/client';
 
 const MIN_AGE = 18;
 const BIO_MAX_LENGTH = 500;
 const DEFAULT_CITY = 'Pasto';
+const HOBBIES_MAX_COUNT = 12;
+const HOBBY_MAX_LENGTH = 32;
 
 export class CompleteProfileDto {
   @IsOptional()
@@ -29,6 +33,30 @@ export class CompleteProfileDto {
     message: 'El género debe ser uno de: MALE, FEMALE, OTHER',
   })
   gender?: Gender;
+
+  @IsOptional()
+  @IsEnum(InterestedIn, {
+    message: 'El interés debe ser uno de: WOMEN, MEN, BOTH',
+  })
+  interestedIn?: InterestedIn;
+
+  @IsOptional()
+  @IsEnum(RelationshipGoal, {
+    message: 'La meta debe ser una de: CASUAL, FRIENDSHIP, RELATIONSHIP, CHAT',
+  })
+  relationshipGoal?: RelationshipGoal;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(HOBBIES_MAX_COUNT, {
+    message: `Puedes seleccionar máximo ${HOBBIES_MAX_COUNT} hobbies`,
+  })
+  @IsString({ each: true })
+  @MaxLength(HOBBY_MAX_LENGTH, {
+    each: true,
+    message: `Cada hobby no puede exceder ${HOBBY_MAX_LENGTH} caracteres`,
+  })
+  hobbies?: string[];
 
   @IsOptional()
   @IsString()
