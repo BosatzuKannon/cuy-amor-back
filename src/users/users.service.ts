@@ -35,6 +35,7 @@ export class UserService {
           id: authUser.userId,
           email,
           firstName: email.split('@')[0] || 'usuario',
+          city: 'Pasto',
           preferences: {
             create: {},
           },
@@ -103,6 +104,7 @@ export class UserService {
           googleId: dto.googleId ?? null,
           firstName,
           lastName: rest.length ? rest.join(' ') : null,
+          city: 'Pasto',
           preferences: {
             create: {},
           },
@@ -132,7 +134,7 @@ export class UserService {
           gender: dto.gender,
           interestedIn: dto.interestedIn,
           relationshipGoal: dto.relationshipGoal,
-          hobbies: dto.hobbies,
+          hobbies: dto.hobbies ?? undefined,
           bio: dto.bio,
           city: dto.city ?? 'Pasto',
           latitude: dto.latitude,
