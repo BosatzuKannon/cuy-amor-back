@@ -70,13 +70,13 @@ export class CompleteProfileDto {
   city?: string;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsNumber()
   @Min(-180)
   @Max(180)
   latitude?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsNumber()
   @Min(-90)
   @Max(90)
   longitude?: number;
