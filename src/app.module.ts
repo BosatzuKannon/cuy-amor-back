@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { InteractionsModule } from './interactions/interactions.module';
 import { KeepAliveModule } from './keep-alive/keep-alive.module';
+import { MatchesModule } from './matches/matches.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UserModule } from './users/users.module';
 
@@ -18,6 +19,7 @@ import { UserModule } from './users/users.module';
     AuthModule,
     UserModule,
     InteractionsModule,
+    MatchesModule,
     KeepAliveModule,
   ],
   controllers: [AppController],
