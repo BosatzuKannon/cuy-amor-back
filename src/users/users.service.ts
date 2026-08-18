@@ -11,6 +11,7 @@ import { SyncUserDto } from '../auth/sync-user.dto';
 import { AddPhotosDto } from './dto/photo.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 const MAX_PHOTOS = 3;
 
@@ -266,6 +267,50 @@ export class UserService {
       return this.serializeProfile(updated);
     } catch (error) {
       this.handlePrismaError(error, 'No se pudo actualizar el perfil');
+    }
+  }
+
+  async updatePreferences(userId: string, dto: UpdatePreferencesDto) {
+    await this.getOrCreateUser({ userId });
+
+    const data: Partial<Prisma.UserPreferenceUncheckedCreateInput> = {};
+    if (dto.minAgePreference !== undefined) {
+      data.minAgePreference = dto.minAgePreference;
+    }
+    if (dto.maxAgePreference !== undefined) {
+      data.maxAgePreference = dto.maxAgePreference;
+    }
+    if (dto.maxDistanceKm !== undefined) {
+      data.maxDistanceKm = dto.maxDistanceKm;
+    }
+    if (dto.showLocation !== undefined) {
+      data.showLocation = dto.showLocation;
+    }
+    if (dto.invisibleMode !== undefined) {
+      data.invisibleMode = dto.invisibleMode;
+    }
+
+    try {
+      if (Object.keys(data).length === 0) {
+        const existing = await this.prisma.userPreference.findUnique({
+          where: { userId },
+        });
+        if (existing) {
+          return existing;
+        }
+        return this.prisma.userPreference.create({ data: { userId } });
+      }
+
+      return await this.prisma.userPreference.upsert({
+        where: { userId },
+        create: { ...data, userId },
+        update: data,
+      });
+    } catch (error) {
+      this.handlePrismaError(
+        error,
+        'No se pudieron actualizar las preferencias',
+      );
     }
   }
 

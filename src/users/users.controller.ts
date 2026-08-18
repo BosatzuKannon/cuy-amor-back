@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditProfileDto } from './dto/edit-profile.dto';
 import { AddPhotosDto } from './dto/photo.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { UserService } from './users.service';
 
 @Controller('users')
@@ -32,6 +33,14 @@ export class UserController {
     @Body() dto: EditProfileDto,
   ) {
     return this.usersService.editProfile(user.userId, dto);
+  }
+
+  @Patch('preferences')
+  async updatePreferences(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdatePreferencesDto,
+  ) {
+    return this.usersService.updatePreferences(user.userId, dto);
   }
 
   @Post('photos')
