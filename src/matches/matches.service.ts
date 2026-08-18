@@ -16,6 +16,7 @@ export class MatchesService {
           select: {
             id: true,
             firstName: true,
+            gender: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -28,6 +29,7 @@ export class MatchesService {
           select: {
             id: true,
             firstName: true,
+            gender: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -63,6 +65,7 @@ export class MatchesService {
         otherUser: {
           id: otherUser.id,
           firstName: otherUser.firstName,
+          gender: otherUser.gender,
           avatarUrl: otherUser.photos[0]?.url ?? null,
         },
         lastMessage,
