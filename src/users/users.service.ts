@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Gender, InterestedIn, Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncUserDto } from '../auth/sync-user.dto';
@@ -14,6 +14,10 @@ import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 const MAX_PHOTOS = 3;
+const DEFAULT_MAX_DISTANCE_KM = 50;
+const DEFAULT_MIN_AGE_PREFERENCE = 18;
+const DEFAULT_MAX_AGE_PREFERENCE = 99;
+const EARTH_RADIUS_KM = 6371;
 
 type UserWithRelations = Prisma.UserGetPayload<{
   include: {
@@ -312,6 +316,124 @@ export class UserService {
         'No se pudieron actualizar las preferencias',
       );
     }
+  }
+
+  async getExploreFeed(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        latitude: true,
+        longitude: true,
+        interestedIn: true,
+        preferences: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    const preferences = user.preferences;
+    const maxDistanceKm = preferences?.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM;
+    const minAgePreference =
+      preferences?.minAgePreference ?? DEFAULT_MIN_AGE_PREFERENCE;
+    const maxAgePreference =
+      preferences?.maxAgePreference ?? DEFAULT_MAX_AGE_PREFERENCE;
+
+    const now = new Date();
+    const minBirthDate = this.subtractYears(now, maxAgePreference);
+    const maxBirthDate = this.subtractYears(now, minAgePreference);
+
+    const where: Prisma.UserWhereInput = {
+      id: { not: userId },
+      birthDate: { gte: minBirthDate, lte: maxBirthDate },
+      receivedInteractions: {
+        none: { fromUserId: userId },
+      },
+    };
+
+    if (user.interestedIn && user.interestedIn !== InterestedIn.BOTH) {
+      where.gender =
+        user.interestedIn === InterestedIn.WOMEN ? Gender.FEMALE : Gender.MALE;
+    }
+
+    const { latitude, longitude } = user;
+    if (latitude != null && longitude != null) {
+      const latDelta = maxDistanceKm / 111.32;
+      const lngDelta =
+        maxDistanceKm / (111.32 * Math.cos((latitude * Math.PI) / 180));
+      where.latitude = { gte: latitude - latDelta, lte: latitude + latDelta };
+      where.longitude = {
+        gte: longitude - lngDelta,
+        lte: longitude + lngDelta,
+      };
+    }
+
+    let candidates = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        birthDate: true,
+        bio: true,
+        latitude: true,
+        longitude: true,
+        photos: {
+          where: { isProfile: true },
+          orderBy: { order: 'asc' },
+          select: { id: true, url: true },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (latitude != null && longitude != null) {
+      candidates = candidates.filter(
+        (candidate) =>
+          candidate.latitude != null &&
+          candidate.longitude != null &&
+          this.haversineKm(
+            latitude,
+            longitude,
+            candidate.latitude,
+            candidate.longitude,
+          ) <= maxDistanceKm,
+      );
+    }
+
+    return candidates.map((candidate) => ({
+      id: candidate.id,
+      firstName: candidate.firstName,
+      birthDate: candidate.birthDate,
+      bio: candidate.bio,
+      photo: candidate.photos[0] ?? null,
+    }));
+  }
+
+  private subtractYears(date: Date, years: number): Date {
+    return new Date(
+      date.getFullYear() - years,
+      date.getMonth(),
+      date.getDate(),
+    );
+  }
+
+  private haversineKm(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLng / 2) ** 2;
+    return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
   }
 
   private async syncPhotos(
