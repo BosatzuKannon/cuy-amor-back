@@ -14,7 +14,12 @@ export class AuthService {
     }
 
     const token = this.jwtService.sign(
-      { role: 'authenticated', sub: userId },
+      {
+        role: 'authenticated',
+        aud: 'authenticated',
+        iss: 'supabase',
+        sub: userId,
+      },
       { secret, expiresIn: '1h' },
     );
 
