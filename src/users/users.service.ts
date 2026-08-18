@@ -376,6 +376,7 @@ export class UserService {
         firstName: true,
         birthDate: true,
         bio: true,
+        gender: true,
         latitude: true,
         longitude: true,
         photos: {
@@ -407,6 +408,7 @@ export class UserService {
       firstName: candidate.firstName,
       birthDate: candidate.birthDate,
       bio: candidate.bio,
+      gender: candidate.gender,
       photo: candidate.photos[0] ?? null,
     }));
   }
