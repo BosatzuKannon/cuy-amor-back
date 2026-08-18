@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -9,10 +10,21 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SyncUserDto } from '../auth/sync-user.dto';
 import { AddPhotosDto } from './dto/photo.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
+
+const MAX_PHOTOS = 3;
+
+type UserWithRelations = Prisma.UserGetPayload<{
+  include: {
+    preferences: true;
+    photos: { orderBy: { order: 'asc' } };
+  };
+}>;
 
 @Injectable()
 export class UserService {
   private readonly userInclude = {
+    preferences: true,
     photos: { orderBy: { order: 'asc' as const } },
   } as const;
 
@@ -165,6 +177,188 @@ export class UserService {
     } catch (error) {
       this.handlePrismaError(error, 'No se pudieron guardar las fotos');
     }
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.getOrCreateUser({ userId });
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+    return this.serializeProfile(user);
+  }
+
+  async editProfile(userId: string, dto: EditProfileDto) {
+    await this.getOrCreateUser({ userId });
+
+    const userUpdate: Prisma.UserUpdateInput = {};
+    if (dto.firstName !== undefined) {
+      userUpdate.firstName = dto.firstName;
+    }
+    if (dto.lastName !== undefined) {
+      userUpdate.lastName = dto.lastName;
+    }
+    if (dto.birthDate !== undefined) {
+      userUpdate.birthDate = new Date(dto.birthDate);
+    }
+    if (dto.gender !== undefined) {
+      userUpdate.gender = dto.gender;
+    }
+    if (dto.interestedIn !== undefined) {
+      userUpdate.interestedIn = dto.interestedIn;
+    }
+    if (dto.relationshipGoal !== undefined) {
+      userUpdate.relationshipGoal = dto.relationshipGoal;
+    }
+    if (dto.hobbies !== undefined) {
+      userUpdate.hobbies = dto.hobbies;
+    }
+    if (dto.bio !== undefined) {
+      userUpdate.bio = dto.bio;
+    }
+    if (dto.city !== undefined) {
+      userUpdate.city = dto.city;
+    }
+    if (dto.latitude !== undefined) {
+      userUpdate.latitude = dto.latitude;
+    }
+    if (dto.longitude !== undefined) {
+      userUpdate.longitude = dto.longitude;
+    }
+
+    const preferenceUpdate = dto.preferences
+      ? {
+          pushNotifications: dto.preferences.pushNotifications,
+          emailNotifications: dto.preferences.emailNotifications,
+          matchAlerts: dto.preferences.matchAlerts,
+          messageAlerts: dto.preferences.messageAlerts,
+          showLocation: dto.preferences.showLocation,
+          invisibleMode: dto.preferences.invisibleMode,
+          maxDistanceKm: dto.preferences.maxDistanceKm,
+          minAgePreference: dto.preferences.minAgePreference,
+          maxAgePreference: dto.preferences.maxAgePreference,
+        }
+      : undefined;
+
+    try {
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (Object.keys(userUpdate).length > 0) {
+          await tx.user.update({ where: { id: userId }, data: userUpdate });
+        }
+
+        if (preferenceUpdate) {
+          await tx.userPreference.upsert({
+            where: { userId },
+            create: { userId, ...preferenceUpdate },
+            update: preferenceUpdate,
+          });
+        }
+
+        if (dto.photos) {
+          await this.syncPhotos(tx, userId, dto.photos);
+        }
+
+        return tx.user.findUniqueOrThrow({
+          where: { id: userId },
+          include: this.userInclude,
+        });
+      });
+
+      return this.serializeProfile(updated);
+    } catch (error) {
+      this.handlePrismaError(error, 'No se pudo actualizar el perfil');
+    }
+  }
+
+  private async syncPhotos(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    photos: EditPhotoDto[],
+  ) {
+    if (photos.length > MAX_PHOTOS) {
+      throw new BadRequestException(
+        `No puedes tener más de ${MAX_PHOTOS} fotos en tu perfil`,
+      );
+    }
+
+    const existing = await tx.photo.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((photo) => photo.id));
+
+    for (const photo of photos) {
+      if (photo.id && !existingIds.has(photo.id)) {
+        throw new BadRequestException(
+          'Una de las fotos ya no existe o no te pertenece',
+        );
+      }
+    }
+
+    const keptIds = new Set(
+      photos
+        .filter((photo) => photo.id !== undefined)
+        .map((photo) => photo.id as string),
+    );
+    const removedIds = existing
+      .filter((photo) => !keptIds.has(photo.id))
+      .map((photo) => photo.id);
+
+    if (removedIds.length > 0) {
+      await tx.photo.deleteMany({
+        where: { id: { in: removedIds } },
+      });
+    }
+
+    for (const photo of photos) {
+      const data = {
+        url: photo.url,
+        order: photo.order,
+        isProfile: photo.isProfile ?? false,
+      };
+
+      if (photo.id) {
+        await tx.photo.update({ where: { id: photo.id }, data });
+      } else {
+        await tx.photo.create({ data: { ...data, userId } });
+      }
+    }
+  }
+
+  private serializeProfile(user: UserWithRelations) {
+    const photos = (user.photos ?? []).slice(0, MAX_PHOTOS);
+
+    return {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      birthDate: user.birthDate,
+      gender: user.gender,
+      interestedIn: user.interestedIn,
+      relationshipGoal: user.relationshipGoal,
+      hobbies: user.hobbies,
+      bio: user.bio,
+      city: user.city,
+      latitude: user.latitude,
+      longitude: user.longitude,
+      preferences: user.preferences
+        ? {
+            pushNotifications: user.preferences.pushNotifications,
+            emailNotifications: user.preferences.emailNotifications,
+            matchAlerts: user.preferences.matchAlerts,
+            messageAlerts: user.preferences.messageAlerts,
+            showLocation: user.preferences.showLocation,
+            invisibleMode: user.preferences.invisibleMode,
+            maxDistanceKm: user.preferences.maxDistanceKm,
+            minAgePreference: user.preferences.minAgePreference,
+            maxAgePreference: user.preferences.maxAgePreference,
+          }
+        : null,
+      photos: photos.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+        order: photo.order,
+        isProfile: photo.isProfile,
+      })),
+    };
   }
 
   private handlePrismaError(error: unknown, fallbackMessage: string): never {

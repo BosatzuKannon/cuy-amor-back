@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '../common/decorators/current-user.decora
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { EditProfileDto } from './dto/edit-profile.dto';
 import { AddPhotosDto } from './dto/photo.dto';
 import { UserService } from './users.service';
 
@@ -14,7 +15,7 @@ export class UserController {
 
   @Get('me')
   async getProfile(@CurrentUser() user: AuthenticatedUser) {
-    return this.usersService.getOrCreateUser(user);
+    return this.usersService.getProfile(user.userId);
   }
 
   @Patch('profile')
@@ -23,6 +24,14 @@ export class UserController {
     @Body() dto: CompleteProfileDto,
   ) {
     return this.usersService.updateProfile(user.userId, dto);
+  }
+
+  @Patch('edit')
+  async editProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: EditProfileDto,
+  ) {
+    return this.usersService.editProfile(user.userId, dto);
   }
 
   @Post('photos')
