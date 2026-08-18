@@ -1,10 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly messageSelect = {
+    id: true,
+    content: true,
+    isRead: true,
+    isPriority: true,
+    createdAt: true,
+    senderId: true,
+    recipientId: true,
+  } as const;
 
   async getUserMatches(userId: string) {
     const matches = await this.prisma.match.findMany({
@@ -73,6 +83,62 @@ export class MatchesService {
           ? !lastMessage.isRead && lastMessage.senderId !== userId
           : false,
       };
+    });
+  }
+
+  async getMatchMessages(matchId: string, userId: string) {
+    const match = await this.prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+      select: { id: true },
+    });
+
+    if (!match) {
+      throw new NotFoundException('Match no encontrado');
+    }
+
+    await this.prisma.message.updateMany({
+      where: {
+        matchId,
+        senderId: { not: userId },
+        isRead: false,
+      },
+      data: { isRead: true },
+    });
+
+    return this.prisma.message.findMany({
+      where: { matchId },
+      orderBy: { createdAt: 'asc' },
+      select: this.messageSelect,
+    });
+  }
+
+  async createMessage(matchId: string, userId: string, content: string) {
+    const match = await this.prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+      select: { id: true, user1Id: true, user2Id: true },
+    });
+
+    if (!match) {
+      throw new NotFoundException('Match no encontrado');
+    }
+
+    const recipientId =
+      match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    return this.prisma.message.create({
+      data: {
+        content,
+        matchId,
+        senderId: userId,
+        recipientId,
+      },
+      select: this.messageSelect,
     });
   }
 }
