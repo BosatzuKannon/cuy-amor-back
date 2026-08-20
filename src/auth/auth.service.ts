@@ -4,10 +4,8 @@ import * as jwt from 'jsonwebtoken';
 @Injectable()
 export class AuthService {
   generateSupabaseToken(userId: string) {
-    const rawSecret = process.env.SUPABASE_JWT_SECRET;
-    if (!rawSecret) throw new UnauthorizedException('Supabase JWT Secret is missing');
-
-    const secretBuffer = Buffer.from(rawSecret, 'base64');
+    const secret = process.env.SUPABASE_JWT_SECRET;
+    if (!secret) throw new UnauthorizedException('Supabase JWT Secret is missing');
 
     const payload = {
       role: 'authenticated',
@@ -16,7 +14,8 @@ export class AuthService {
       sub: userId,
     };
 
-    const supabaseToken = jwt.sign(payload, secretBuffer, { expiresIn: '1h' });
+    // Sign using the raw string
+    const supabaseToken = jwt.sign(payload, secret, { expiresIn: '1h' });
     return { supabaseToken };
   }
 }
