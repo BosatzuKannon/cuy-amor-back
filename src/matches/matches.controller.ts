@@ -38,6 +38,11 @@ export class MatchesController {
     @Param('matchId', new ParseUUIDPipe({ version: '4' })) matchId: string,
     @Body() dto: CreateMessageDto,
   ) {
-    return this.matchesService.createMessage(matchId, user.userId, dto.content);
+    return this.matchesService.createMessage(
+      matchId,
+      user.userId,
+      dto.content,
+      dto.replyToId,
+    );
   }
 }

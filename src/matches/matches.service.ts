@@ -14,6 +14,7 @@ export class MatchesService {
     createdAt: true,
     senderId: true,
     recipientId: true,
+    replyToId: true,
   } as const;
 
   async getUserMatches(userId: string) {
@@ -115,7 +116,12 @@ export class MatchesService {
     });
   }
 
-  async createMessage(matchId: string, userId: string, content: string) {
+  async createMessage(
+    matchId: string,
+    userId: string,
+    content: string,
+    replyToId?: string,
+  ) {
     const match = await this.prisma.match.findFirst({
       where: {
         id: matchId,
@@ -128,6 +134,16 @@ export class MatchesService {
       throw new NotFoundException('Match no encontrado');
     }
 
+    if (replyToId) {
+      const replyTo = await this.prisma.message.findFirst({
+        where: { id: replyToId, matchId },
+        select: { id: true },
+      });
+      if (!replyTo) {
+        throw new NotFoundException('Mensaje a responder no encontrado');
+      }
+    }
+
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
@@ -137,6 +153,7 @@ export class MatchesService {
         matchId,
         senderId: userId,
         recipientId,
+        replyToId,
       },
       select: this.messageSelect,
     });

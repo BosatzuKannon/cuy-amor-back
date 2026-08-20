@@ -162,9 +162,13 @@ model Message {
   senderId    String   @db.Uuid
   sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
   recipientId String?  @db.Uuid
+  replyToId   String?  @db.Uuid
+  replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     Message[] @relation("MessageReplies")
 
   @@index([matchId])
   @@index([senderId])
+  @@index([replyToId])
 }
 
 model VirtualGift {

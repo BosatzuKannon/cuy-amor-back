@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateMessageDto {
   @IsString()
@@ -7,4 +13,8 @@ export class CreateMessageDto {
     message: 'El mensaje no puede superar los 2000 caracteres',
   })
   content: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'replyToId debe ser un UUID válido' })
+  replyToId?: string;
 }
