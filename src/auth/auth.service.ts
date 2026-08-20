@@ -1,28 +1,20 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwtService: JwtService) {}
-
   generateSupabaseToken(userId: string) {
     const secret = process.env.SUPABASE_JWT_SECRET;
-    if (!secret) {
-      throw new UnauthorizedException(
-        'SUPABASE_JWT_SECRET no está configurado en el servidor',
-      );
-    }
+    if (!secret) throw new UnauthorizedException('Supabase JWT Secret is missing');
 
-    const token = this.jwtService.sign(
-      {
-        role: 'authenticated',
-        aud: 'authenticated',
-        iss: 'supabase',
-        sub: userId,
-      },
-      { secret, expiresIn: '1h' },
-    );
+    const payload = {
+      role: 'authenticated',
+      aud: 'authenticated',
+      iss: 'supabase',
+      sub: userId,
+    };
 
-    return { supabaseToken: token };
+    const supabaseToken = jwt.sign(payload, secret, { expiresIn: '1h' });
+    return { supabaseToken };
   }
 }
