@@ -390,13 +390,15 @@ export class UserService {
         birthDate: true,
         bio: true,
         gender: true,
+        city: true,
+        relationshipGoal: true,
+        hobbies: true,
         latitude: true,
         longitude: true,
         photos: {
-          where: { isProfile: true },
           orderBy: { order: 'asc' },
           select: { id: true, url: true },
-          take: 1,
+          take: MAX_PHOTOS,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -422,7 +424,25 @@ export class UserService {
       birthDate: candidate.birthDate,
       bio: candidate.bio,
       gender: candidate.gender,
+      city: candidate.city,
+      relationshipGoal: candidate.relationshipGoal,
+      hobbies: candidate.hobbies,
       photo: candidate.photos[0] ?? null,
+      photos: candidate.photos.map((photo) => ({ id: photo.id, url: photo.url })),
+      distance:
+        latitude != null &&
+        longitude != null &&
+        candidate.latitude != null &&
+        candidate.longitude != null
+          ? Number(
+              this.haversineKm(
+                latitude,
+                longitude,
+                candidate.latitude,
+                candidate.longitude,
+              ).toFixed(1),
+            )
+          : null,
     }));
   }
 
