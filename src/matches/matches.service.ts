@@ -28,6 +28,7 @@ export class MatchesService {
             id: true,
             firstName: true,
             gender: true,
+            lastSeen: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -41,6 +42,7 @@ export class MatchesService {
             id: true,
             firstName: true,
             gender: true,
+            lastSeen: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -77,6 +79,7 @@ export class MatchesService {
           id: otherUser.id,
           firstName: otherUser.firstName,
           gender: otherUser.gender,
+          lastSeen: otherUser.lastSeen,
           avatarUrl: otherUser.photos[0]?.url ?? null,
         },
         lastMessage,

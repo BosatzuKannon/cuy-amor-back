@@ -82,6 +82,7 @@ model User {
   cashBalanceInCents Int               @default(0)
   isVerified         Boolean           @default(false)
   boostedUntil       DateTime?
+  lastSeen           DateTime?
   referralCode       String?           @unique
   referredById       String?           @db.Uuid
   referredBy         User?             @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)

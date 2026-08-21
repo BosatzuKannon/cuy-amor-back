@@ -35,6 +35,11 @@ export class UserController {
     return this.usersService.editProfile(user.userId, dto);
   }
 
+  @Patch('last-seen')
+  async updateLastSeen(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.updateLastSeen(user.userId);
+  }
+
   @Patch('preferences')
   async updatePreferences(
     @CurrentUser() user: AuthenticatedUser,

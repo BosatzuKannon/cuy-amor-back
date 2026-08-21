@@ -274,6 +274,19 @@ export class UserService {
     }
   }
 
+  async updateLastSeen(userId: string) {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastSeen: new Date() },
+        select: { id: true, lastSeen: true },
+      });
+      return { ok: true, lastSeen: user.lastSeen };
+    } catch (error) {
+      this.handlePrismaError(error, 'No se pudo actualizar la última conexión');
+    }
+  }
+
   async updatePreferences(userId: string, dto: UpdatePreferencesDto) {
     await this.getOrCreateUser({ userId });
 
