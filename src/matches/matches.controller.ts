@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -30,6 +31,14 @@ export class MatchesController {
     @Param('matchId', new ParseUUIDPipe({ version: '4' })) matchId: string,
   ) {
     return this.matchesService.getMatchMessages(matchId, user.userId);
+  }
+
+  @Patch(':matchId/read')
+  async markRead(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('matchId', new ParseUUIDPipe({ version: '4' })) matchId: string,
+  ) {
+    return this.matchesService.markMatchAsRead(matchId, user.userId);
   }
 
   @Post(':matchId/messages')

@@ -91,6 +91,24 @@ export class MatchesService {
   }
 
   async getMatchMessages(matchId: string, userId: string) {
+    const match = await this.assertMembership(matchId, userId);
+
+    await this.markIncomingAsRead(match.id, userId);
+
+    return this.prisma.message.findMany({
+      where: { matchId },
+      orderBy: { createdAt: 'asc' },
+      select: this.messageSelect,
+    });
+  }
+
+  async markMatchAsRead(matchId: string, userId: string) {
+    const match = await this.assertMembership(matchId, userId);
+    const result = await this.markIncomingAsRead(match.id, userId);
+    return { updatedCount: result.count };
+  }
+
+  private async assertMembership(matchId: string, userId: string) {
     const match = await this.prisma.match.findFirst({
       where: {
         id: matchId,
@@ -103,19 +121,17 @@ export class MatchesService {
       throw new NotFoundException('Match no encontrado');
     }
 
-    await this.prisma.message.updateMany({
+    return match;
+  }
+
+  private markIncomingAsRead(matchId: string, userId: string) {
+    return this.prisma.message.updateMany({
       where: {
         matchId,
         senderId: { not: userId },
         isRead: false,
       },
       data: { isRead: true },
-    });
-
-    return this.prisma.message.findMany({
-      where: { matchId },
-      orderBy: { createdAt: 'asc' },
-      select: this.messageSelect,
     });
   }
 
