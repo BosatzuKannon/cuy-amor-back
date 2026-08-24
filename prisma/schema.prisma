@@ -42,7 +42,7 @@ enum TransactionType {
   BOOST_PURCHASE
   REFERRAL_COMMISSION
   WELCOME_GIFT
-  NINJA_ACTIVATION
+  NINJA_ACTIVATED
   ZUMBIDO_SENT
   VIP_SUBSCRIPTION
 }
@@ -85,9 +85,10 @@ model User {
   coinsBalance       Int               @default(0)
   cashBalanceInCents Int               @default(0)
   isVerified         Boolean           @default(false)
+  isNinja            Boolean           @default(false)
+  ninjaExpiresAt     DateTime?
+  isLeyenda          Boolean           @default(false)
   boostedUntil       DateTime?
-  ninjaUntil         DateTime?
-  leyendaUntil       DateTime?
   lastSeen           DateTime?
   referralCode       String?           @unique
   referredById       String?           @db.Uuid

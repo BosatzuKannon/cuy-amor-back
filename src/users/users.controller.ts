@@ -60,4 +60,14 @@ export class UserController {
   ) {
     return this.usersService.addPhotos(user.userId, dto);
   }
+
+  @Post('ninja/activate')
+  async activateNinja(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.activateNinja(user.userId);
+  }
+
+  @Post('ninja/deactivate')
+  async deactivateNinja(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.deactivateNinja(user.userId);
+  }
 }

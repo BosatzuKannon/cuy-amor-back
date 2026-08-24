@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +17,9 @@ import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 const MAX_PHOTOS = 3;
+const NINJA_COST_IN_COINS = 50;
+const NINJA_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const MS_PER_DAY = 86_400_000;
 const DEFAULT_MAX_DISTANCE_KM = 50;
 const DEFAULT_MIN_AGE_PREFERENCE = 18;
 const DEFAULT_MAX_AGE_PREFERENCE = 99;
@@ -201,6 +207,79 @@ export class UserService {
       throw new NotFoundException('El usuario no existe');
     }
     return { coinsBalance: user.coinsBalance };
+  }
+
+  async activateNinja(userId: string) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { isNinja: true, coinsBalance: true },
+      });
+
+      if (!user) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
+      if (user.isNinja) {
+        throw new BadRequestException('El modo Cuy Ninja ya está activo');
+      }
+
+      if (user.coinsBalance < NINJA_COST_IN_COINS) {
+        throw new BadRequestException(
+          'Saldo insuficiente para activar el modo Cuy Ninja',
+        );
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { coinsBalance: { decrement: NINJA_COST_IN_COINS } },
+        select: { coinsBalance: true },
+      });
+
+      await tx.transaction.create({
+        data: {
+          reference: `CUY-${Date.now()}-${randomUUID()}`,
+          amountInCents: 0,
+          coinsAmount: -NINJA_COST_IN_COINS,
+          type: 'NINJA_ACTIVATED',
+          status: 'APPROVED',
+          userId,
+        },
+        select: { id: true },
+      });
+
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          isNinja: true,
+          ninjaExpiresAt: new Date(Date.now() + NINJA_DURATION_MS),
+        },
+        select: { isNinja: true, ninjaExpiresAt: true },
+      });
+    });
+  }
+
+  async deactivateNinja(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isLeyenda: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    if (!user.isLeyenda) {
+      throw new ForbiddenException(
+        'Solo los usuarios Cuy Leyenda pueden desactivar este modo manualmente.',
+      );
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { isNinja: false, ninjaExpiresAt: null },
+      select: { isNinja: true, ninjaExpiresAt: true },
+    });
   }
 
   async editProfile(userId: string, dto: EditProfileDto) {
@@ -542,6 +621,14 @@ export class UserService {
 
   private serializeProfile(user: UserWithRelations) {
     const photos = (user.photos ?? []).slice(0, MAX_PHOTOS);
+    const now = Date.now();
+    const ninjaDaysLeft =
+      user.isNinja && user.ninjaExpiresAt
+        ? Math.max(
+            0,
+            Math.ceil((user.ninjaExpiresAt.getTime() - now) / MS_PER_DAY),
+          )
+        : 0;
 
     return {
       firstName: user.firstName,
@@ -556,6 +643,8 @@ export class UserService {
       latitude: user.latitude,
       longitude: user.longitude,
       coinsBalance: user.coinsBalance,
+      isNinja: user.isNinja,
+      ninjaDaysLeft,
       preferences: user.preferences
         ? {
             pushNotifications: user.preferences.pushNotifications,
