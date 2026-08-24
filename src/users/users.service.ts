@@ -428,7 +428,10 @@ export class UserService {
       relationshipGoal: candidate.relationshipGoal,
       hobbies: candidate.hobbies,
       photo: candidate.photos[0] ?? null,
-      photos: candidate.photos.map((photo) => ({ id: photo.id, url: photo.url })),
+      photos: candidate.photos.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+      })),
       distance:
         latitude != null &&
         longitude != null &&

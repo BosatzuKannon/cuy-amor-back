@@ -5,7 +5,8 @@ import * as jwt from 'jsonwebtoken';
 export class AuthService {
   generateSupabaseToken(userId: string) {
     const secret = process.env.SUPABASE_JWT_SECRET;
-    if (!secret) throw new UnauthorizedException('Supabase JWT Secret is missing');
+    if (!secret)
+      throw new UnauthorizedException('Supabase JWT Secret is missing');
 
     const payload = {
       role: 'authenticated',

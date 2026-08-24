@@ -41,6 +41,10 @@ enum TransactionType {
   PRIORITY_MESSAGE
   BOOST_PURCHASE
   REFERRAL_COMMISSION
+  WELCOME_GIFT
+  NINJA_ACTIVATION
+  ZUMBIDO_SENT
+  VIP_SUBSCRIPTION
 }
 
 enum TransactionStatus {
@@ -82,6 +86,8 @@ model User {
   cashBalanceInCents Int               @default(0)
   isVerified         Boolean           @default(false)
   boostedUntil       DateTime?
+  ninjaUntil         DateTime?
+  leyendaUntil       DateTime?
   lastSeen           DateTime?
   referralCode       String?           @unique
   referredById       String?           @db.Uuid
@@ -153,18 +159,18 @@ model Match {
 }
 
 model Message {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
   content     String
-  isRead      Boolean  @default(false)
-  isPriority  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  matchId     String?  @db.Uuid
-  match       Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  senderId    String   @db.Uuid
-  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  recipientId String?  @db.Uuid
-  replyToId   String?  @db.Uuid
-  replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  isRead      Boolean   @default(false)
+  isPriority  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  matchId     String?   @db.Uuid
+  match       Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId    String    @db.Uuid
+  sender      User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String?   @db.Uuid
+  replyToId   String?   @db.Uuid
+  replyTo     Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies     Message[] @relation("MessageReplies")
 
   @@index([matchId])
@@ -181,6 +187,17 @@ model VirtualGift {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   userGifts     UserGift[]
+}
+
+model CoinPackage {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  coinsAmount  Int
+  priceInCents Int
+  isActive     Boolean  @default(true)
+  badge        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model UserGift {
