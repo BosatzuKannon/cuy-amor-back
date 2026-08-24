@@ -62,4 +62,13 @@ export class MatchesController {
   ) {
     return this.matchesService.sendZumbido(matchId, user.userId);
   }
+
+  @Post(':matchId/gifts/:giftId')
+  async sendGift(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('matchId', new ParseUUIDPipe({ version: '4' })) matchId: string,
+    @Param('giftId', new ParseUUIDPipe({ version: '4' })) giftId: string,
+  ) {
+    return this.matchesService.sendGift(matchId, giftId, user.userId);
+  }
 }

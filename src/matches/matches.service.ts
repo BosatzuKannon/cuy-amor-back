@@ -10,6 +10,30 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
+const GIFT_RECEIVER_SHARE = 0.35;
+const PLATFORM_REVENUE_SOURCE_GIFT_FEE = 'GIFT_FEE';
+
+const MESSAGE_SELECT_WITH_GIFT = {
+  id: true,
+  content: true,
+  isRead: true,
+  isPriority: true,
+  isSystemMessage: true,
+  createdAt: true,
+  senderId: true,
+  recipientId: true,
+  replyToId: true,
+  gift: {
+    select: {
+      id: true,
+      name: true,
+      iconUrl: true,
+      coinCost: true,
+      cashValueCops: true,
+    },
+  },
+} as const;
+
 @Injectable()
 export class MatchesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -244,6 +268,112 @@ export class MatchesService {
           isSystemMessage: true,
         },
         select: this.messageSelect,
+      });
+    });
+  }
+
+  async sendGift(matchId: string, giftId: string, userId: string) {
+    const match = await this.prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+      select: { id: true, user1Id: true, user2Id: true },
+    });
+
+    if (!match) {
+      throw new NotFoundException('Match no encontrado');
+    }
+
+    const recipientId =
+      match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const [gift, sender] = await Promise.all([
+        tx.virtualGift.findUnique({
+          where: { id: giftId },
+          select: {
+            id: true,
+            name: true,
+            iconUrl: true,
+            coinCost: true,
+            cashValueCops: true,
+          },
+        }),
+        tx.user.findUnique({
+          where: { id: userId },
+          select: { coinsBalance: true },
+        }),
+      ]);
+
+      if (!gift) {
+        throw new NotFoundException('El regalo no existe');
+      }
+
+      if (!sender) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
+      if (sender.coinsBalance < gift.coinCost) {
+        throw new BadRequestException(
+          'Saldo insuficiente para enviar este regalo',
+        );
+      }
+
+      const receiverCut = Math.floor(gift.cashValueCops * GIFT_RECEIVER_SHARE);
+      const platformCut = gift.cashValueCops - receiverCut;
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { coinsBalance: { decrement: gift.coinCost } },
+        select: { coinsBalance: true },
+      });
+
+      await tx.transaction.create({
+        data: {
+          reference: `CUY-${Date.now()}-${randomUUID()}`,
+          amountInCents: 0,
+          coinsAmount: -gift.coinCost,
+          type: 'GIFT_SENT',
+          status: 'APPROVED',
+          userId,
+        },
+        select: { id: true },
+      });
+
+      await tx.user.update({
+        where: { id: recipientId },
+        data: { cashBalanceInCents: { increment: receiverCut } },
+        select: { id: true },
+      });
+
+      await tx.platformRevenue.create({
+        data: {
+          amountInCents: platformCut,
+          source: PLATFORM_REVENUE_SOURCE_GIFT_FEE,
+        },
+        select: { id: true },
+      });
+
+      await tx.userGift.create({
+        data: {
+          giftId: gift.id,
+          senderId: userId,
+          receiverId: recipientId,
+        },
+        select: { id: true },
+      });
+
+      return tx.message.create({
+        data: {
+          content: 'ha enviado un regalo',
+          isSystemMessage: true,
+          matchId,
+          senderId: userId,
+          recipientId,
+          giftId: gift.id,
+        },
+        select: MESSAGE_SELECT_WITH_GIFT,
       });
     });
   }

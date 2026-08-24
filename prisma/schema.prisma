@@ -160,23 +160,26 @@ model Match {
 }
 
 model Message {
-  id              String    @id @default(uuid()) @db.Uuid
+  id              String      @id @default(uuid()) @db.Uuid
   content         String
-  isRead          Boolean   @default(false)
-  isPriority      Boolean   @default(false)
-  isSystemMessage Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  matchId     String?   @db.Uuid
-  match       Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  senderId    String    @db.Uuid
-  sender      User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  recipientId String?   @db.Uuid
-  replyToId   String?   @db.Uuid
-  replyTo     Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies     Message[] @relation("MessageReplies")
+  isRead          Boolean     @default(false)
+  isPriority      Boolean     @default(false)
+  isSystemMessage Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  matchId         String?     @db.Uuid
+  match           Match?      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId        String      @db.Uuid
+  sender          User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId     String?     @db.Uuid
+  giftId          String?     @db.Uuid
+  gift            VirtualGift? @relation(fields: [giftId], references: [id], onDelete: Restrict)
+  replyToId       String?     @db.Uuid
+  replyTo         Message?    @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]   @relation("MessageReplies")
 
   @@index([matchId])
   @@index([senderId])
+  @@index([giftId])
   @@index([replyToId])
 }
 
@@ -189,6 +192,9 @@ model VirtualGift {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   userGifts     UserGift[]
+  messages      Message[]
+
+  @@index([coinCost])
 }
 
 model CoinPackage {
@@ -327,4 +333,14 @@ model SystemConfig {
   appStatusMessage String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model PlatformRevenue {
+  id            String   @id @default(uuid()) @db.Uuid
+  amountInCents Int
+  source        String
+  createdAt     DateTime @default(now())
+
+  @@index([source])
+  @@index([createdAt])
 }
