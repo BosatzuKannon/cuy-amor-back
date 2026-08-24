@@ -87,6 +87,7 @@ export class WompiService {
         dbTransaction.id,
         dbTransaction.coinsAmount,
         dbTransaction.user.id,
+        transaction.id,
       );
       return;
     }
@@ -103,11 +104,15 @@ export class WompiService {
     transactionId: string,
     coinsAmount: number | null,
     userId: string,
+    wompiTransactionId?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.transaction.updateMany({
         where: { id: transactionId, status: 'PENDING' },
-        data: { status: 'APPROVED' },
+        data: {
+          status: 'APPROVED',
+          wompiTransactionId,
+        },
       });
 
       if (updated.count === 0) {
