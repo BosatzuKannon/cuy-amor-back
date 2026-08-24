@@ -54,4 +54,12 @@ export class MatchesController {
       dto.replyToId,
     );
   }
+
+  @Post(':matchId/zumbido')
+  async sendZumbido(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('matchId', new ParseUUIDPipe({ version: '4' })) matchId: string,
+  ) {
+    return this.matchesService.sendZumbido(matchId, user.userId);
+  }
 }

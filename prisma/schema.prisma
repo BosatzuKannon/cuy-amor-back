@@ -159,11 +159,12 @@ model Match {
 }
 
 model Message {
-  id          String    @id @default(uuid()) @db.Uuid
-  content     String
-  isRead      Boolean   @default(false)
-  isPriority  Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(uuid()) @db.Uuid
+  content         String
+  isRead          Boolean   @default(false)
+  isPriority      Boolean   @default(false)
+  isSystemMessage Boolean   @default(false)
+  createdAt       DateTime  @default(now())
   matchId     String?   @db.Uuid
   match       Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
   senderId    String    @db.Uuid

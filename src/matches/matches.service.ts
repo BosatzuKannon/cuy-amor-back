@@ -1,4 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -11,6 +19,7 @@ export class MatchesService {
     content: true,
     isRead: true,
     isPriority: true,
+    isSystemMessage: true,
     createdAt: true,
     senderId: true,
     recipientId: true,
@@ -175,6 +184,67 @@ export class MatchesService {
         replyToId,
       },
       select: this.messageSelect,
+    });
+  }
+
+  async sendZumbido(matchId: string, userId: string) {
+    const ZUMBIDO_COST_IN_COINS = 5;
+
+    const match = await this.prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+      },
+      select: { id: true, user1Id: true, user2Id: true },
+    });
+
+    if (!match) {
+      throw new NotFoundException('Match no encontrado');
+    }
+
+    const recipientId =
+      match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { coinsBalance: true },
+      });
+
+      if (!user || user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
+        throw new BadRequestException(
+          'Saldo insuficiente para enviar un zumbido',
+        );
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { coinsBalance: { decrement: ZUMBIDO_COST_IN_COINS } },
+        select: { coinsBalance: true },
+      });
+
+      await tx.transaction.create({
+        data: {
+          reference: `CUY-${Date.now()}-${randomUUID()}`,
+          amountInCents: 0,
+          coinsAmount: -ZUMBIDO_COST_IN_COINS,
+          type: 'ZUMBIDO_SENT',
+          status: 'APPROVED',
+          userId,
+        },
+        select: { id: true },
+      });
+
+      return tx.message.create({
+        data: {
+          content: 'ha enviado un zumbido',
+          matchId,
+          senderId: userId,
+          recipientId,
+          isSystemMessage: true,
+        },
+        select: this.messageSelect,
+      });
     });
   }
 }
