@@ -19,6 +19,11 @@ export class UserController {
     return this.usersService.getProfile(user.userId);
   }
 
+  @Get('me/balance')
+  async getBalance(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.getBalance(user.userId);
+  }
+
   @Patch('profile')
   async completeProfile(
     @CurrentUser() user: AuthenticatedUser,

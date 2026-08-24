@@ -192,6 +192,17 @@ export class UserService {
     return this.serializeProfile(user);
   }
 
+  async getBalance(userId: string): Promise<{ coinsBalance: number }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { coinsBalance: true },
+    });
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+    return { coinsBalance: user.coinsBalance };
+  }
+
   async editProfile(userId: string, dto: EditProfileDto) {
     await this.getOrCreateUser({ userId });
 
@@ -544,6 +555,7 @@ export class UserService {
       city: user.city,
       latitude: user.latitude,
       longitude: user.longitude,
+      coinsBalance: user.coinsBalance,
       preferences: user.preferences
         ? {
             pushNotifications: user.preferences.pushNotifications,
