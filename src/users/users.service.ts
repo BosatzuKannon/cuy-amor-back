@@ -248,7 +248,7 @@ export class UserService {
         select: { id: true },
       });
 
-      return tx.user.update({
+      const updated = await tx.user.update({
         where: { id: userId },
         data: {
           isNinja: true,
@@ -256,6 +256,19 @@ export class UserService {
         },
         select: { isNinja: true, ninjaExpiresAt: true },
       });
+
+      return {
+        isNinja: updated.isNinja,
+        ninjaExpiresAt: updated.ninjaExpiresAt,
+        ninjaDaysLeft: updated.ninjaExpiresAt
+          ? Math.max(
+              0,
+              Math.ceil(
+                (updated.ninjaExpiresAt.getTime() - Date.now()) / MS_PER_DAY,
+              ),
+            )
+          : 0,
+      };
     });
   }
 
@@ -644,6 +657,7 @@ export class UserService {
       longitude: user.longitude,
       coinsBalance: user.coinsBalance,
       isNinja: user.isNinja,
+      isLeyenda: user.isLeyenda,
       ninjaDaysLeft,
       preferences: user.preferences
         ? {
