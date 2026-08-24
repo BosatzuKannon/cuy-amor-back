@@ -1,4 +1,12 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Redirect,
+  UseGuards,
+} from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
@@ -17,5 +25,17 @@ export class TransactionsController {
     @Body() dto: CreateCheckoutDto,
   ) {
     return this.transactionsService.createCheckout(user.userId, dto);
+  }
+
+  /**
+   * Trampoline público para retornos de Wompi en Expo Go:
+   * Wompi exige un redirect-url HTTPS, así que recibimos aquí y
+   * rebotamos (302) hacia el deep link exp:// del usuario.
+   */
+  @Get('return')
+  @Redirect()
+  handleWompiReturn(@Query('url') url: string) {
+    if (!url) return { url: 'https://cuyamor.com' };
+    return { url };
   }
 }
