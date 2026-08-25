@@ -222,32 +222,46 @@ export class MatchesService {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
-        select: { coinsBalance: true },
+        select: { isLeyenda: true, dailyZumbidosLeft: true, coinsBalance: true },
       });
 
-      if (!user || user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
+      if (!user) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
+      const isFree = user.isLeyenda && user.dailyZumbidosLeft > 0;
+
+      if (!isFree && user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
         throw new BadRequestException(
           'Saldo insuficiente para enviar un zumbido',
         );
       }
 
-      await tx.user.update({
-        where: { id: userId },
-        data: { coinsBalance: { decrement: ZUMBIDO_COST_IN_COINS } },
-        select: { coinsBalance: true },
-      });
+      if (isFree) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { dailyZumbidosLeft: { decrement: 1 } },
+          select: { dailyZumbidosLeft: true },
+        });
+      } else {
+        await tx.user.update({
+          where: { id: userId },
+          data: { coinsBalance: { decrement: ZUMBIDO_COST_IN_COINS } },
+          select: { coinsBalance: true },
+        });
 
-      await tx.transaction.create({
-        data: {
-          reference: `CUY-${Date.now()}-${randomUUID()}`,
-          amountInCents: 0,
-          coinsAmount: -ZUMBIDO_COST_IN_COINS,
-          type: 'ZUMBIDO_SENT',
-          status: 'APPROVED',
-          userId,
-        },
-        select: { id: true },
-      });
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: -ZUMBIDO_COST_IN_COINS,
+            type: 'ZUMBIDO_SENT',
+            status: 'APPROVED',
+            userId,
+          },
+          select: { id: true },
+        });
+      }
 
       return tx.message.create({
         data: {

@@ -20,6 +20,9 @@ const MAX_PHOTOS = 3;
 const NINJA_COST_IN_COINS = 50;
 const NINJA_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const MS_PER_DAY = 86_400_000;
+const LEYENDA_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+const LEYENDA_PRICE_IN_CENTS = 2499900;
+const LEYENDA_WELCOME_COINS = 100;
 const DEFAULT_MAX_DISTANCE_KM = 50;
 const DEFAULT_MIN_AGE_PREFERENCE = 18;
 const DEFAULT_MAX_AGE_PREFERENCE = 99;
@@ -198,22 +201,22 @@ export class UserService {
     return this.serializeProfile(user);
   }
 
-  async getBalance(userId: string): Promise<{ coinsBalance: number }> {
+  async getBalance(userId: string): Promise<{ coinsBalance: number; dailyZumbidosLeft: number; dailyCuyazosLeft: number }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { coinsBalance: true },
+      select: { coinsBalance: true, dailyZumbidosLeft: true, dailyCuyazosLeft: true },
     });
     if (!user) {
       throw new NotFoundException('El usuario no existe');
     }
-    return { coinsBalance: user.coinsBalance };
+    return { coinsBalance: user.coinsBalance, dailyZumbidosLeft: user.dailyZumbidosLeft, dailyCuyazosLeft: user.dailyCuyazosLeft };
   }
 
   async activateNinja(userId: string) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
-        select: { isNinja: true, coinsBalance: true },
+        select: { isNinja: true, isLeyenda: true, coinsBalance: true },
       });
 
       if (!user) {
@@ -224,35 +227,41 @@ export class UserService {
         throw new BadRequestException('El modo Cuy Ninja ya está activo');
       }
 
-      if (user.coinsBalance < NINJA_COST_IN_COINS) {
+      const isFree = user.isLeyenda;
+
+      if (!isFree && user.coinsBalance < NINJA_COST_IN_COINS) {
         throw new BadRequestException(
           'Saldo insuficiente para activar el modo Cuy Ninja',
         );
       }
 
-      await tx.user.update({
-        where: { id: userId },
-        data: { coinsBalance: { decrement: NINJA_COST_IN_COINS } },
-        select: { coinsBalance: true },
-      });
+      if (!isFree) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { coinsBalance: { decrement: NINJA_COST_IN_COINS } },
+          select: { coinsBalance: true },
+        });
 
-      await tx.transaction.create({
-        data: {
-          reference: `CUY-${Date.now()}-${randomUUID()}`,
-          amountInCents: 0,
-          coinsAmount: -NINJA_COST_IN_COINS,
-          type: 'NINJA_ACTIVATED',
-          status: 'APPROVED',
-          userId,
-        },
-        select: { id: true },
-      });
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: -NINJA_COST_IN_COINS,
+            type: 'NINJA_ACTIVATED',
+            status: 'APPROVED',
+            userId,
+          },
+          select: { id: true },
+        });
+      }
 
       const updated = await tx.user.update({
         where: { id: userId },
         data: {
           isNinja: true,
-          ninjaExpiresAt: new Date(Date.now() + NINJA_DURATION_MS),
+          ninjaExpiresAt: isFree
+            ? new Date(Date.now() + LEYENDA_DURATION_MS)
+            : new Date(Date.now() + NINJA_DURATION_MS),
         },
         select: { isNinja: true, ninjaExpiresAt: true },
       });
@@ -292,6 +301,67 @@ export class UserService {
       where: { id: userId },
       data: { isNinja: false, ninjaExpiresAt: null },
       select: { isNinja: true, ninjaExpiresAt: true },
+    });
+  }
+
+  async subscribeToLeyenda(userId: string) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { isLeyenda: true, leyendaExpiresAt: true },
+      });
+
+      if (!user) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
+      if (user.isLeyenda && user.leyendaExpiresAt && user.leyendaExpiresAt > new Date()) {
+        throw new BadRequestException('Ya tienes una suscripción Cuy Leyenda activa');
+      }
+
+      const expiresAt = new Date(Date.now() + LEYENDA_DURATION_MS);
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          isLeyenda: true,
+          leyendaExpiresAt: expiresAt,
+          coinsBalance: { increment: LEYENDA_WELCOME_COINS },
+          dailyZumbidosLeft: 3,
+          dailyCuyazosLeft: 3,
+        },
+        select: {
+          isLeyenda: true,
+          leyendaExpiresAt: true,
+          coinsBalance: true,
+          dailyZumbidosLeft: true,
+          dailyCuyazosLeft: true,
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          reference: `CUY-${Date.now()}-${randomUUID()}`,
+          amountInCents: LEYENDA_PRICE_IN_CENTS,
+          coinsAmount: LEYENDA_WELCOME_COINS,
+          type: 'VIP_SUBSCRIPTION',
+          status: 'APPROVED',
+          userId,
+        },
+        select: { id: true },
+      });
+
+      return {
+        isLeyenda: updated.isLeyenda,
+        leyendaExpiresAt: updated.leyendaExpiresAt,
+        coinsBalance: updated.coinsBalance,
+        dailyZumbidosLeft: updated.dailyZumbidosLeft,
+        dailyCuyazosLeft: updated.dailyCuyazosLeft,
+        leyendaDaysLeft: Math.max(
+          0,
+          Math.ceil((expiresAt.getTime() - Date.now()) / MS_PER_DAY),
+        ),
+      };
     });
   }
 
@@ -642,6 +712,13 @@ export class UserService {
             Math.ceil((user.ninjaExpiresAt.getTime() - now) / MS_PER_DAY),
           )
         : 0;
+    const leyendaDaysLeft =
+      user.isLeyenda && user.leyendaExpiresAt
+        ? Math.max(
+            0,
+            Math.ceil((user.leyendaExpiresAt.getTime() - now) / MS_PER_DAY),
+          )
+        : 0;
 
     return {
       firstName: user.firstName,
@@ -659,6 +736,10 @@ export class UserService {
       cashBalanceInCents: user.cashBalanceInCents,
       isNinja: user.isNinja,
       isLeyenda: user.isLeyenda,
+      leyendaExpiresAt: user.leyendaExpiresAt,
+      leyendaDaysLeft,
+      dailyZumbidosLeft: user.dailyZumbidosLeft,
+      dailyCuyazosLeft: user.dailyCuyazosLeft,
       ninjaDaysLeft,
       preferences: user.preferences
         ? {

@@ -70,4 +70,9 @@ export class UserController {
   async deactivateNinja(@CurrentUser() user: AuthenticatedUser) {
     return this.usersService.deactivateNinja(user.userId);
   }
+
+  @Post('leyenda/subscribe')
+  async subscribeToLeyenda(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.subscribeToLeyenda(user.userId);
+  }
 }

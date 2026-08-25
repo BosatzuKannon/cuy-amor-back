@@ -88,6 +88,9 @@ model User {
   isNinja            Boolean           @default(false)
   ninjaExpiresAt     DateTime?
   isLeyenda          Boolean           @default(false)
+  leyendaExpiresAt   DateTime?
+  dailyZumbidosLeft  Int               @default(0)
+  dailyCuyazosLeft   Int               @default(0)
   boostedUntil       DateTime?
   lastSeen           DateTime?
   referralCode       String?           @unique

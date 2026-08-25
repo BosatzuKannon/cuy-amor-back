@@ -32,4 +32,54 @@ export class NinjaCronService {
       );
     }
   }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async resetDailyLeyendaPerks() {
+    try {
+      const result = await this.prisma.user.updateMany({
+        where: { isLeyenda: true },
+        data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 3 },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(
+          `Perks diarios de Cuy Leyenda reiniciados para ${result.count} usuario(s)`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'No se pudo reiniciar los perks diarios de Cuy Leyenda',
+        error as Error,
+      );
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async deactivateExpiredLeyenda() {
+    try {
+      const result = await this.prisma.user.updateMany({
+        where: {
+          isLeyenda: true,
+          leyendaExpiresAt: { lte: new Date() },
+        },
+        data: {
+          isLeyenda: false,
+          leyendaExpiresAt: null,
+          dailyZumbidosLeft: 0,
+          dailyCuyazosLeft: 0,
+        },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(
+          `Suscripción Cuy Leyenda expirada para ${result.count} usuario(s)`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'No se pudo procesar la expiración de Cuy Leyenda',
+        error as Error,
+      );
+    }
+  }
 }

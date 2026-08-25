@@ -45,27 +45,39 @@ export class InteractionsService {
 
         let newCoinBalance: number | undefined;
         if (type === InteractionType.SUPER_LIKE) {
-          const result = await tx.user.updateMany({
-            where: { id: fromUserId, coinsBalance: { gte: SUPER_LIKE_COST } },
-            data: { coinsBalance: { decrement: SUPER_LIKE_COST } },
-          });
-          if (result.count === 0) {
-            const fromUser = await tx.user.findUnique({
-              where: { id: fromUserId },
-              select: { id: true },
-            });
-            if (!fromUser) {
-              throw new NotFoundException('El usuario no existe');
-            }
-            throw new BadRequestException(
-              'Saldo insuficiente para enviar un Cuyazo',
-            );
-          }
-          const updated = await tx.user.findUnique({
+          const fromUser = await tx.user.findUnique({
             where: { id: fromUserId },
-            select: { coinsBalance: true },
+            select: { isLeyenda: true, dailyCuyazosLeft: true, coinsBalance: true },
           });
-          newCoinBalance = updated?.coinsBalance;
+          if (!fromUser) {
+            throw new NotFoundException('El usuario no existe');
+          }
+
+          const isFree = fromUser.isLeyenda && fromUser.dailyCuyazosLeft > 0;
+
+          if (isFree) {
+            await tx.user.update({
+              where: { id: fromUserId },
+              data: { dailyCuyazosLeft: { decrement: 1 } },
+              select: { dailyCuyazosLeft: true },
+            });
+            newCoinBalance = fromUser.coinsBalance;
+          } else {
+            const result = await tx.user.updateMany({
+              where: { id: fromUserId, coinsBalance: { gte: SUPER_LIKE_COST } },
+              data: { coinsBalance: { decrement: SUPER_LIKE_COST } },
+            });
+            if (result.count === 0) {
+              throw new BadRequestException(
+                'Saldo insuficiente para enviar un Cuyazo',
+              );
+            }
+            const updated = await tx.user.findUnique({
+              where: { id: fromUserId },
+              select: { coinsBalance: true },
+            });
+            newCoinBalance = updated?.coinsBalance;
+          }
         }
 
         await tx.interaction.create({
