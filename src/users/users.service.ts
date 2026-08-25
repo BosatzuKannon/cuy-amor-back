@@ -452,16 +452,20 @@ export class UserService {
           dailyCuyazosLeft: 3,
         },
         select: {
+          isLeyenda: true,
+          leyendaExpiresAt: true,
           coinsBalance: true,
+          dailyZumbidosLeft: true,
+          dailyCuyazosLeft: true,
         },
       });
 
       return {
-        isLeyenda: true,
-        leyendaExpiresAt: expiresAt,
+        isLeyenda: user.isLeyenda,
+        leyendaExpiresAt: user.leyendaExpiresAt,
         coinsBalance: user.coinsBalance,
-        dailyZumbidosLeft: 3,
-        dailyCuyazosLeft: 3,
+        dailyZumbidosLeft: user.dailyZumbidosLeft,
+        dailyCuyazosLeft: user.dailyCuyazosLeft,
         leyendaDaysLeft: Math.max(
           0,
           Math.ceil((expiresAt.getTime() - Date.now()) / MS_PER_DAY),
