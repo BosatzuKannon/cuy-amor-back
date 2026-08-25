@@ -7,6 +7,7 @@ import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditProfileDto } from './dto/edit-profile.dto';
 import { AddPhotosDto } from './dto/photo.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { VerifyLeyendaDto } from './dto/verify-leyenda.dto';
 import { UserService } from './users.service';
 
 @Controller('users')
@@ -71,8 +72,16 @@ export class UserController {
     return this.usersService.deactivateNinja(user.userId);
   }
 
-  @Post('leyenda/subscribe')
-  async subscribeToLeyenda(@CurrentUser() user: AuthenticatedUser) {
-    return this.usersService.subscribeToLeyenda(user.userId);
+  @Post('leyenda/checkout')
+  async leyendaCheckout(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.createLeyendaCheckout(user.userId);
+  }
+
+  @Post('leyenda/verify')
+  async leyendaVerify(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VerifyLeyendaDto,
+  ) {
+    return this.usersService.verifyLeyendaSubscription(user.userId, dto.reference);
   }
 }

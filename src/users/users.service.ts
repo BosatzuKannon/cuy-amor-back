@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Gender, InterestedIn, Prisma } from '@prisma/client';
@@ -37,6 +39,8 @@ type UserWithRelations = Prisma.UserGetPayload<{
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   private readonly userInclude = {
     preferences: true,
     photos: { orderBy: { order: 'asc' as const } },
@@ -304,24 +308,141 @@ export class UserService {
     });
   }
 
-  async subscribeToLeyenda(userId: string) {
+  async createLeyendaCheckout(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isLeyenda: true, leyendaExpiresAt: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    if (user.isLeyenda && user.leyendaExpiresAt && user.leyendaExpiresAt > new Date()) {
+      throw new BadRequestException('Ya tienes una suscripción Cuy Leyenda activa');
+    }
+
+    const reference = `CUY-LEYENDA-${Date.now()}-${randomUUID()}`;
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        reference,
+        amountInCents: LEYENDA_PRICE_IN_CENTS,
+        coinsAmount: LEYENDA_WELCOME_COINS,
+        type: 'VIP_SUBSCRIPTION',
+        status: 'PENDING',
+        userId,
+      },
+    });
+
+    const signature = this.buildIntegritySignature(
+      transaction.reference,
+      transaction.amountInCents,
+    );
+
+    return {
+      reference: transaction.reference,
+      amountInCents: transaction.amountInCents,
+      currency: 'COP' as const,
+      signature,
+      publicKey: process.env.WOMPI_PUBLIC_KEY,
+      transactionId: transaction.id,
+    };
+  }
+
+  async verifyLeyendaSubscription(userId: string, reference: string) {
+    const dbTransaction = await this.prisma.transaction.findUnique({
+      where: { reference },
+      select: {
+        id: true,
+        reference: true,
+        amountInCents: true,
+        status: true,
+        userId: true,
+      },
+    });
+
+    if (!dbTransaction) {
+      throw new NotFoundException('Transacción no encontrada');
+    }
+
+    if (dbTransaction.userId !== userId) {
+      throw new ForbiddenException('Esta transacción no te pertenece');
+    }
+
+    if (dbTransaction.status !== 'PENDING') {
+      return {
+        status: dbTransaction.status,
+        message:
+          dbTransaction.status === 'APPROVED'
+            ? 'La suscripción Cuy Leyenda ya fue activada'
+            : 'La transacción no fue aprobada',
+      };
+    }
+
+    const wompiTx = await this.queryWompiTransaction(reference);
+
+    if (!wompiTx) {
+      return {
+        status: 'PENDING',
+        message: 'El pago aún no ha sido confirmado por Wompi',
+      };
+    }
+
+    if (wompiTx.status === 'APPROVED') {
+      const activated = await this.activateLeyenda(
+        dbTransaction.id,
+        userId,
+        wompiTx.id,
+      );
+      return {
+        status: 'APPROVED',
+        message: '¡Suscripción Cuy Leyenda activada!',
+        ...activated,
+      };
+    }
+
+    if (['DECLINED', 'VOIDED', 'ERROR'].includes(wompiTx.status)) {
+      await this.prisma.transaction.updateMany({
+        where: { id: dbTransaction.id, status: 'PENDING' },
+        data: { status: 'DECLINED' },
+      });
+      return {
+        status: wompiTx.status,
+        message: 'El pago no fue aprobado',
+      };
+    }
+
+    return {
+      status: wompiTx.status,
+      message: 'El pago está siendo procesado',
+    };
+  }
+
+  private async activateLeyenda(
+    transactionId: string,
+    userId: string,
+    wompiTransactionId: string,
+  ) {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { isLeyenda: true, leyendaExpiresAt: true },
+      const updated = await tx.transaction.updateMany({
+        where: { id: transactionId, status: 'PENDING' },
+        data: { status: 'APPROVED', wompiTransactionId },
       });
 
-      if (!user) {
-        throw new NotFoundException('El usuario no existe');
-      }
-
-      if (user.isLeyenda && user.leyendaExpiresAt && user.leyendaExpiresAt > new Date()) {
-        throw new BadRequestException('Ya tienes una suscripción Cuy Leyenda activa');
+      if (updated.count === 0) {
+        const existing = await tx.transaction.findUniqueOrThrow({
+          where: { id: transactionId },
+          select: { status: true },
+        });
+        throw new ConflictException(
+          `La transacción ya fue procesada con estado: ${existing.status}`,
+        );
       }
 
       const expiresAt = new Date(Date.now() + LEYENDA_DURATION_MS);
 
-      const updated = await tx.user.update({
+      const user = await tx.user.update({
         where: { id: userId },
         data: {
           isLeyenda: true,
@@ -331,38 +452,80 @@ export class UserService {
           dailyCuyazosLeft: 3,
         },
         select: {
-          isLeyenda: true,
-          leyendaExpiresAt: true,
           coinsBalance: true,
-          dailyZumbidosLeft: true,
-          dailyCuyazosLeft: true,
         },
-      });
-
-      await tx.transaction.create({
-        data: {
-          reference: `CUY-${Date.now()}-${randomUUID()}`,
-          amountInCents: LEYENDA_PRICE_IN_CENTS,
-          coinsAmount: LEYENDA_WELCOME_COINS,
-          type: 'VIP_SUBSCRIPTION',
-          status: 'APPROVED',
-          userId,
-        },
-        select: { id: true },
       });
 
       return {
-        isLeyenda: updated.isLeyenda,
-        leyendaExpiresAt: updated.leyendaExpiresAt,
-        coinsBalance: updated.coinsBalance,
-        dailyZumbidosLeft: updated.dailyZumbidosLeft,
-        dailyCuyazosLeft: updated.dailyCuyazosLeft,
+        isLeyenda: true,
+        leyendaExpiresAt: expiresAt,
+        coinsBalance: user.coinsBalance,
+        dailyZumbidosLeft: 3,
+        dailyCuyazosLeft: 3,
         leyendaDaysLeft: Math.max(
           0,
           Math.ceil((expiresAt.getTime() - Date.now()) / MS_PER_DAY),
         ),
       };
     });
+  }
+
+  private async queryWompiTransaction(reference: string) {
+    const privateKey = process.env.WOMPI_PRIVATE_KEY;
+    if (!privateKey) {
+      this.logger.error('WOMPI_PRIVATE_KEY no está configurada');
+      throw new InternalServerErrorException('Error de configuración de pagos');
+    }
+
+    try {
+      const response = await fetch(
+        `https://production.wompi.su/v1/transactions?reference=${reference}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${privateKey}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        this.logger.error(
+          `Wompi API error ${response.status} for reference ${reference}`,
+        );
+        return null;
+      }
+
+      const body = (await response.json()) as {
+        data?: { id?: string; status?: string };
+      };
+
+      const tx = body?.data;
+      if (!tx?.id || !tx?.status) {
+        return null;
+      }
+
+      return { id: tx.id, status: tx.status };
+    } catch (error) {
+      this.logger.error(
+        `Error consultando Wompi API para ${reference}: ${error instanceof Error ? error.message : error}`,
+      );
+      return null;
+    }
+  }
+
+  private buildIntegritySignature(
+    reference: string,
+    amountInCents: number,
+  ): string {
+    const secret = process.env.WOMPI_INTEGRITY_SECRET ?? '';
+    if (!secret) {
+      this.logger.warn(
+        'WOMPI_INTEGRITY_SECRET no está configurada; la firma se generará vacía',
+      );
+    }
+    return createHash('sha256')
+      .update(`${reference}${amountInCents}COP${secret}`)
+      .digest('hex');
   }
 
   async editProfile(userId: string, dto: EditProfileDto) {
