@@ -371,12 +371,40 @@ export class UserService {
     }
 
     if (dbTransaction.status !== 'PENDING') {
+      if (dbTransaction.status === 'APPROVED') {
+        const user = await this.prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: {
+            isLeyenda: true,
+            leyendaExpiresAt: true,
+            coinsBalance: true,
+            dailyZumbidosLeft: true,
+            dailyCuyazosLeft: true,
+          },
+        });
+        const leyendaDaysLeft =
+          user.isLeyenda && user.leyendaExpiresAt
+            ? Math.max(
+                0,
+                Math.ceil(
+                  (user.leyendaExpiresAt.getTime() - Date.now()) / MS_PER_DAY,
+                ),
+              )
+            : 0;
+        return {
+          status: 'APPROVED',
+          message: 'La suscripción Cuy Leyenda ya fue activada',
+          isLeyenda: user.isLeyenda,
+          leyendaExpiresAt: user.leyendaExpiresAt,
+          coinsBalance: user.coinsBalance,
+          dailyZumbidosLeft: user.dailyZumbidosLeft,
+          dailyCuyazosLeft: user.dailyCuyazosLeft,
+          leyendaDaysLeft,
+        };
+      }
       return {
         status: dbTransaction.status,
-        message:
-          dbTransaction.status === 'APPROVED'
-            ? 'La suscripción Cuy Leyenda ya fue activada'
-            : 'La transacción no fue aprobada',
+        message: 'La transacción no fue aprobada',
       };
     }
 
