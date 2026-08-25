@@ -656,6 +656,7 @@ export class UserService {
       latitude: user.latitude,
       longitude: user.longitude,
       coinsBalance: user.coinsBalance,
+      cashBalanceInCents: user.cashBalanceInCents,
       isNinja: user.isNinja,
       isLeyenda: user.isLeyenda,
       ninjaDaysLeft,
