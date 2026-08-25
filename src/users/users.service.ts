@@ -468,14 +468,12 @@ export class UserService {
         );
       }
 
-      const expiresAt = new Date(Date.now() + LEYENDA_DURATION_MS);
-
       const user = await tx.user.update({
         where: { id: userId },
         data: {
           isLeyenda: true,
-          leyendaExpiresAt: expiresAt,
-          coinsBalance: { increment: LEYENDA_WELCOME_COINS },
+          leyendaExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          coinsBalance: { increment: 100 },
           dailyZumbidosLeft: 3,
           dailyCuyazosLeft: 3,
         },
@@ -494,10 +492,14 @@ export class UserService {
         coinsBalance: user.coinsBalance,
         dailyZumbidosLeft: user.dailyZumbidosLeft,
         dailyCuyazosLeft: user.dailyCuyazosLeft,
-        leyendaDaysLeft: Math.max(
-          0,
-          Math.ceil((expiresAt.getTime() - Date.now()) / MS_PER_DAY),
-        ),
+        leyendaDaysLeft: user.leyendaExpiresAt
+          ? Math.max(
+              0,
+              Math.ceil(
+                (user.leyendaExpiresAt.getTime() - Date.now()) / MS_PER_DAY,
+              ),
+            )
+          : 0,
       };
     });
   }
