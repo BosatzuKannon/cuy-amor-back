@@ -189,6 +189,7 @@ model VirtualGift {
   iconUrl       String
   coinCost      Int
   cashValueCops Int
+  isActive      Boolean    @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   userGifts     UserGift[]

@@ -16,7 +16,7 @@ export class GiftsService {
 
   listGifts() {
     return this.prisma.virtualGift.findMany({
-      where: {},
+      where: { isActive: true },
       orderBy: { coinCost: 'asc' },
       select: GIFT_SELECT,
     });

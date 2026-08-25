@@ -13,24 +13,13 @@ import { PrismaService } from '../prisma/prisma.service';
 const GIFT_RECEIVER_SHARE = 0.35;
 const PLATFORM_REVENUE_SOURCE_GIFT_FEE = 'GIFT_FEE';
 
-const MESSAGE_SELECT_WITH_GIFT = {
-  id: true,
-  content: true,
-  isRead: true,
-  isPriority: true,
-  isSystemMessage: true,
-  createdAt: true,
-  senderId: true,
-  recipientId: true,
-  replyToId: true,
-  gift: {
-    select: {
-      id: true,
-      name: true,
-      iconUrl: true,
-      coinCost: true,
-      cashValueCops: true,
-    },
+const GIFT_RELATION_SELECT = {
+  select: {
+    id: true,
+    name: true,
+    iconUrl: true,
+    coinCost: true,
+    cashValueCops: true,
   },
 } as const;
 
@@ -48,6 +37,7 @@ export class MatchesService {
     senderId: true,
     recipientId: true,
     replyToId: true,
+    gift: GIFT_RELATION_SELECT,
   } as const;
 
   async getUserMatches(userId: string) {
@@ -373,7 +363,7 @@ export class MatchesService {
           recipientId,
           giftId: gift.id,
         },
-        select: MESSAGE_SELECT_WITH_GIFT,
+        select: this.messageSelect,
       });
     });
   }
