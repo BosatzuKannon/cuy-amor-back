@@ -119,7 +119,23 @@ export class WompiService {
         return;
       }
 
-      if (coinsAmount !== null && coinsAmount > 0) {
+      const dbTx = await tx.transaction.findUnique({
+        where: { id: transactionId },
+        select: { type: true },
+      });
+
+      if (dbTx?.type === 'VIP_SUBSCRIPTION') {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            isLeyenda: true,
+            leyendaExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            coinsBalance: { increment: 100 },
+            dailyZumbidosLeft: 3,
+            dailyCuyazosLeft: 1,
+          },
+        });
+      } else if (coinsAmount !== null && coinsAmount > 0) {
         await tx.user.update({
           where: { id: userId },
           data: { coinsBalance: { increment: coinsAmount } },
