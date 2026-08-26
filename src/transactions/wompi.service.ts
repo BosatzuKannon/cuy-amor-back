@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -121,7 +121,7 @@ export class WompiService {
 
       const dbTx = await tx.transaction.findUnique({
         where: { id: transactionId },
-        select: { type: true },
+        select: { type: true, amountInCents: true },
       });
 
       if (dbTx?.type === 'VIP_SUBSCRIPTION') {
@@ -140,6 +140,47 @@ export class WompiService {
           where: { id: userId },
           data: { coinsBalance: { increment: coinsAmount } },
         });
+
+        if (dbTx?.type === 'COIN_RECHARGE') {
+          const previousRecharges = await tx.transaction.count({
+            where: {
+              userId,
+              type: 'COIN_RECHARGE',
+              status: 'APPROVED',
+              id: { not: transactionId },
+            },
+          });
+
+          if (previousRecharges === 0) {
+            const buyer = await tx.user.findUnique({
+              where: { id: userId },
+              select: { referredById: true },
+            });
+
+            if (buyer?.referredById) {
+              const commission = Math.floor(dbTx.amountInCents * 0.1);
+
+              await tx.user.update({
+                where: { id: buyer.referredById },
+                data: { referralEarnings: { increment: commission } },
+              });
+
+              await tx.transaction.create({
+                data: {
+                  reference: `CUY-REF-${Date.now()}-${randomUUID()}`,
+                  amountInCents: commission,
+                  type: 'REFERRAL_COMMISSION',
+                  status: 'APPROVED',
+                  userId: buyer.referredById,
+                },
+              });
+
+              this.logger.log(
+                `Referral commission of ${commission} cents credited to ${buyer.referredById} from buyer ${userId}`,
+              );
+            }
+          }
+        }
       }
     });
   }

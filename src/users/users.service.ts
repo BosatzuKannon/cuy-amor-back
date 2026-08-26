@@ -25,6 +25,10 @@ const MS_PER_DAY = 86_400_000;
 const LEYENDA_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const LEYENDA_PRICE_IN_CENTS = 2499900;
 const LEYENDA_WELCOME_COINS = 100;
+const WELCOME_GIFT_COINS = 100;
+const REFERRAL_CODE_LENGTH = 8;
+const REFERRAL_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const MAX_REFERRAL_CODE_ATTEMPTS = 10;
 const DEFAULT_MAX_DISTANCE_KM = 50;
 const DEFAULT_MIN_AGE_PREFERENCE = 18;
 const DEFAULT_MAX_AGE_PREFERENCE = 99;
@@ -60,17 +64,36 @@ export class UserService {
 
     try {
       const email = authUser.email ?? '';
-      return await this.prisma.user.create({
-        data: {
-          id: authUser.userId,
-          email,
-          firstName: email.split('@')[0] || 'usuario',
-          city: 'Pasto',
-          preferences: {
-            create: {},
+      return await this.prisma.$transaction(async (tx) => {
+        const referralCode = await this.generateReferralCode(tx);
+
+        const user = await tx.user.create({
+          data: {
+            id: authUser.userId,
+            email,
+            firstName: email.split('@')[0] || 'usuario',
+            city: 'Pasto',
+            referralCode,
+            coinsBalance: WELCOME_GIFT_COINS,
+            preferences: {
+              create: {},
+            },
           },
-        },
-        include: this.userInclude,
+          include: this.userInclude,
+        });
+
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-WELCOME-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: WELCOME_GIFT_COINS,
+            type: 'WELCOME_GIFT',
+            status: 'APPROVED',
+            userId: user.id,
+          },
+        });
+
+        return user;
       });
     } catch (error) {
       if (
@@ -127,18 +150,49 @@ export class UserService {
     const [firstName = 'Usuario', ...rest] = derivedName.split(' ');
 
     try {
-      return await this.prisma.user.create({
-        data: {
-          id: authUser.userId,
-          email,
-          googleId: dto.googleId ?? null,
-          firstName,
-          lastName: rest.length ? rest.join(' ') : null,
-          city: 'Pasto',
-          preferences: {
-            create: {},
+      return await this.prisma.$transaction(async (tx) => {
+        const referralCode = await this.generateReferralCode(tx);
+
+        let referredById: string | null = null;
+        if (dto.referredBy) {
+          const referrer = await tx.user.findUnique({
+            where: { referralCode: dto.referredBy },
+            select: { id: true },
+          });
+          if (referrer) {
+            referredById = referrer.id;
+          }
+        }
+
+        const user = await tx.user.create({
+          data: {
+            id: authUser.userId,
+            email,
+            googleId: dto.googleId ?? null,
+            firstName,
+            lastName: rest.length ? rest.join(' ') : null,
+            city: 'Pasto',
+            referralCode,
+            referredById,
+            coinsBalance: WELCOME_GIFT_COINS,
+            preferences: {
+              create: {},
+            },
           },
-        },
+        });
+
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-WELCOME-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: WELCOME_GIFT_COINS,
+            type: 'WELCOME_GIFT',
+            status: 'APPROVED',
+            userId: user.id,
+          },
+        });
+
+        return user;
       });
     } catch (error) {
       if (
@@ -932,6 +986,8 @@ export class UserService {
       longitude: user.longitude,
       coinsBalance: user.coinsBalance,
       cashBalanceInCents: user.cashBalanceInCents,
+      referralCode: user.referralCode,
+      referralEarnings: user.referralEarnings,
       isNinja: user.isNinja,
       isLeyenda: user.isLeyenda,
       leyendaExpiresAt: user.leyendaExpiresAt,
@@ -959,6 +1015,32 @@ export class UserService {
         isProfile: photo.isProfile,
       })),
     };
+  }
+
+  private async generateReferralCode(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
+    for (let attempt = 0; attempt < MAX_REFERRAL_CODE_ATTEMPTS; attempt++) {
+      let code = '';
+      for (let i = 0; i < REFERRAL_CODE_LENGTH; i++) {
+        code += REFERRAL_CODE_CHARS.charAt(
+          Math.floor(Math.random() * REFERRAL_CODE_CHARS.length),
+        );
+      }
+
+      const exists = await tx.user.findUnique({
+        where: { referralCode: code },
+        select: { id: true },
+      });
+
+      if (!exists) {
+        return code;
+      }
+    }
+
+    throw new InternalServerErrorException(
+      'No se pudo generar un código de referido único',
+    );
   }
 
   private handlePrismaError(error: unknown, fallbackMessage: string): never {
