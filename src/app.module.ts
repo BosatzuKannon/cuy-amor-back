@@ -13,6 +13,7 @@ import { MatchesModule } from './matches/matches.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UserModule } from './users/users.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { UserModule } from './users/users.module';
     CoinPackagesModule,
     GiftsModule,
     TransactionsModule,
+    WalletModule,
     KeepAliveModule,
   ],
   controllers: [AppController],
