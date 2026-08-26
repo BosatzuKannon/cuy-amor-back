@@ -617,6 +617,25 @@ export class UserService {
       .digest('hex');
   }
 
+  async deleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, firstName: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    this.logger.log(
+      `User deleted account: ${userId} (${user.email ?? user.firstName})`,
+    );
+
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    return { message: 'Cuenta eliminada correctamente' };
+  }
+
   async editProfile(userId: string, dto: EditProfileDto) {
     await this.getOrCreateUser({ userId });
 

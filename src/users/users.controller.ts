@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -83,5 +83,10 @@ export class UserController {
     @Body() dto: VerifyLeyendaDto,
   ) {
     return this.usersService.verifyLeyendaSubscription(user.userId, dto.reference);
+  }
+
+  @Delete('me')
+  async deleteAccount(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.deleteAccount(user.userId);
   }
 }
