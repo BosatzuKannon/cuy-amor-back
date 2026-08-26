@@ -513,7 +513,8 @@ export class UserService {
 
     try {
       const response = await fetch(
-        `https://production.wompi.su/v1/transactions?reference=${reference}`,
+        //`https://production.wompi.su/v1/transactions?reference=${reference}`,
+        `https://sandbox.wompi.su/v1/transactions?reference=${reference}`,
         {
           method: 'GET',
           headers: {
