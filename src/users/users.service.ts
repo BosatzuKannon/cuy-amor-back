@@ -475,7 +475,7 @@ export class UserService {
           leyendaExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           coinsBalance: { increment: 100 },
           dailyZumbidosLeft: 3,
-          dailyCuyazosLeft: 3,
+          dailyCuyazosLeft: 1,
         },
         select: {
           isLeyenda: true,
