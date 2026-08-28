@@ -42,7 +42,8 @@ export class CompleteProfileDto {
 
   @IsOptional()
   @IsEnum(RelationshipGoal, {
-    message: 'La meta debe ser una de: CASUAL, FRIENDSHIP, RELATIONSHIP, CHAT',
+    message:
+      'La meta debe ser una de: CASUAL, FRIENDSHIP, RELATIONSHIP, CHAT, LET_IT_FLOW, LIGHT_CASUAL',
   })
   relationshipGoal?: RelationshipGoal;
 

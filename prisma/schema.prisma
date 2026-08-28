@@ -27,6 +27,8 @@ enum RelationshipGoal {
   FRIENDSHIP
   RELATIONSHIP
   CHAT
+  LET_IT_FLOW
+  LIGHT_CASUAL
 }
 
 enum InteractionType {
