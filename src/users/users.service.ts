@@ -803,6 +803,7 @@ export class UserService {
 
     const where: Prisma.UserWhereInput = {
       id: { not: userId },
+      isNinja: false,
       birthDate: { gte: minBirthDate, lte: maxBirthDate },
       receivedInteractions: {
         none: { fromUserId: userId },
