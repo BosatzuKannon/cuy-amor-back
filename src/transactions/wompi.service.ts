@@ -158,9 +158,8 @@ export class WompiService {
             });
 
             if (buyer?.referredById) {
-              const commissionInCop = Math.floor(
-                (dbTx.amountInCents * 0.1) / 100,
-              );
+              const commissionInCents = Math.floor(dbTx.amountInCents * 0.1);
+              const commissionInCop = Math.floor(commissionInCents / 100);
 
               await tx.user.update({
                 where: { id: buyer.referredById },
@@ -173,7 +172,7 @@ export class WompiService {
               await tx.transaction.create({
                 data: {
                   reference: `CUY-REF-${Date.now()}-${randomUUID()}`,
-                  amountInCents: commissionInCop,
+                  amountInCents: commissionInCents,
                   type: 'REFERRAL_COMMISSION',
                   status: 'APPROVED',
                   userId: buyer.referredById,
@@ -181,7 +180,7 @@ export class WompiService {
               });
 
               this.logger.log(
-                `Referral commission of ${commissionInCop} COP credited to ${buyer.referredById} from buyer ${userId}`,
+                `Referral commission of ${commissionInCents} cents (${commissionInCop} COP) credited to ${buyer.referredById} from buyer ${userId}`,
               );
             }
           }
