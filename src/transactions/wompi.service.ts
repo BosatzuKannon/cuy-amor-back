@@ -162,7 +162,10 @@ export class WompiService {
 
               await tx.user.update({
                 where: { id: buyer.referredById },
-                data: { referralEarnings: { increment: commission } },
+                data: {
+                  referralEarnings: { increment: commission },
+                  cashBalanceInCents: { increment: commission },
+                },
               });
 
               await tx.transaction.create({
