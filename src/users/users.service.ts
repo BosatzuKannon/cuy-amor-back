@@ -14,6 +14,7 @@ import type { AuthenticatedUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncUserDto } from '../auth/sync-user.dto';
 import { AddPhotosDto } from './dto/photo.dto';
+import { ReportUserDto } from './dto/block-report.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
@@ -259,15 +260,27 @@ export class UserService {
     return this.serializeProfile(user);
   }
 
-  async getBalance(userId: string): Promise<{ coinsBalance: number; dailyZumbidosLeft: number; dailyCuyazosLeft: number }> {
+  async getBalance(userId: string): Promise<{
+    coinsBalance: number;
+    dailyZumbidosLeft: number;
+    dailyCuyazosLeft: number;
+  }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { coinsBalance: true, dailyZumbidosLeft: true, dailyCuyazosLeft: true },
+      select: {
+        coinsBalance: true,
+        dailyZumbidosLeft: true,
+        dailyCuyazosLeft: true,
+      },
     });
     if (!user) {
       throw new NotFoundException('El usuario no existe');
     }
-    return { coinsBalance: user.coinsBalance, dailyZumbidosLeft: user.dailyZumbidosLeft, dailyCuyazosLeft: user.dailyCuyazosLeft };
+    return {
+      coinsBalance: user.coinsBalance,
+      dailyZumbidosLeft: user.dailyZumbidosLeft,
+      dailyCuyazosLeft: user.dailyCuyazosLeft,
+    };
   }
 
   async activateNinja(userId: string) {
@@ -372,8 +385,14 @@ export class UserService {
       throw new NotFoundException('El usuario no existe');
     }
 
-    if (user.isLeyenda && user.leyendaExpiresAt && user.leyendaExpiresAt > new Date()) {
-      throw new BadRequestException('Ya tienes una suscripción Cuy Leyenda activa');
+    if (
+      user.isLeyenda &&
+      user.leyendaExpiresAt &&
+      user.leyendaExpiresAt > new Date()
+    ) {
+      throw new BadRequestException(
+        'Ya tienes una suscripción Cuy Leyenda activa',
+      );
     }
 
     const reference = `CUY-LEYENDA-${Date.now()}-${randomUUID()}`;
@@ -729,6 +748,102 @@ export class UserService {
     } catch (error) {
       this.handlePrismaError(error, 'No se pudo actualizar la última conexión');
     }
+  }
+
+  async blockUser(blockerId: string, blockedId: string, reason?: string) {
+    this.assertDistinctUsers(blockerId, blockedId);
+    await this.assertUserExists(blockedId);
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.blockedUser.upsert({
+        where: {
+          blockerId_blockedId: { blockerId, blockedId },
+        },
+        create: { blockerId, blockedId, reason: reason ?? null },
+        update: { reason: reason ?? null },
+        select: { id: true },
+      });
+
+      const severed = await this.severConnection(tx, blockerId, blockedId);
+
+      return {
+        blocked: true,
+        blockedId,
+        matchSevered: severed.count > 0,
+      };
+    });
+  }
+
+  async reportUser(reporterId: string, reportedId: string, dto: ReportUserDto) {
+    this.assertDistinctUsers(reporterId, reportedId);
+    await this.assertUserExists(reportedId);
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const report = await tx.userReport.create({
+        data: {
+          reason: dto.reason,
+          details: dto.details || null,
+          reporterId,
+          reportedId,
+        },
+        select: { id: true, createdAt: true },
+      });
+
+      await tx.blockedUser.upsert({
+        where: {
+          blockerId_blockedId: { blockerId: reporterId, blockedId: reportedId },
+        },
+        create: {
+          blockerId: reporterId,
+          blockedId: reportedId,
+          reason: dto.reason,
+        },
+        update: { reason: dto.reason },
+        select: { id: true },
+      });
+
+      const severed = await this.severConnection(tx, reporterId, reportedId);
+
+      return {
+        reportId: report.id,
+        reported: true,
+        blocked: true,
+        matchSevered: severed.count > 0,
+      };
+    });
+  }
+
+  private async assertUserExists(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('El usuario no existe');
+    }
+  }
+
+  private assertDistinctUsers(actorId: string, targetId: string) {
+    if (actorId === targetId) {
+      throw new BadRequestException(
+        'No puedes realizar esta acción sobre tu propio perfil',
+      );
+    }
+  }
+
+  private severConnection(
+    tx: Prisma.TransactionClient,
+    user1Id: string,
+    user2Id: string,
+  ) {
+    return tx.match.deleteMany({
+      where: {
+        OR: [
+          { user1Id, user2Id },
+          { user1Id: user2Id, user2Id: user1Id },
+        ],
+      },
+    });
   }
 
   async updatePreferences(userId: string, dto: UpdatePreferencesDto) {

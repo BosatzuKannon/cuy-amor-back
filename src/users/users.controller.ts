@@ -1,8 +1,18 @@
-import { Body, Controller, Delete, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { BlockUserDto, ReportUserDto } from './dto/block-report.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditProfileDto } from './dto/edit-profile.dto';
 import { AddPhotosDto } from './dto/photo.dto';
@@ -82,11 +92,32 @@ export class UserController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: VerifyLeyendaDto,
   ) {
-    return this.usersService.verifyLeyendaSubscription(user.userId, dto.reference);
+    return this.usersService.verifyLeyendaSubscription(
+      user.userId,
+      dto.reference,
+    );
   }
 
   @Delete('me')
   async deleteAccount(@CurrentUser() user: AuthenticatedUser) {
     return this.usersService.deleteAccount(user.userId);
+  }
+
+  @Post(':id/block')
+  async blockUser(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: BlockUserDto,
+  ) {
+    return this.usersService.blockUser(user.userId, id, dto.reason);
+  }
+
+  @Post(':id/report')
+  async reportUser(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: ReportUserDto,
+  ) {
+    return this.usersService.reportUser(user.userId, id, dto);
   }
 }
