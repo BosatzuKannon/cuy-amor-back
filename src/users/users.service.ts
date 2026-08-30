@@ -953,6 +953,7 @@ export class UserService {
         city: true,
         relationshipGoal: true,
         hobbies: true,
+        isLeyenda: true,
         latitude: true,
         longitude: true,
         photos: {
@@ -987,6 +988,7 @@ export class UserService {
       city: candidate.city,
       relationshipGoal: candidate.relationshipGoal,
       hobbies: candidate.hobbies,
+      isLeyenda: candidate.isLeyenda,
       photo: candidate.photos[0] ?? null,
       photos: candidate.photos.map((photo) => ({
         id: photo.id,

@@ -52,6 +52,7 @@ export class MatchesService {
             firstName: true,
             gender: true,
             lastSeen: true,
+            isLeyenda: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -66,6 +67,7 @@ export class MatchesService {
             firstName: true,
             gender: true,
             lastSeen: true,
+            isLeyenda: true,
             photos: {
               where: { isProfile: true },
               orderBy: { order: 'asc' },
@@ -103,6 +105,7 @@ export class MatchesService {
           firstName: otherUser.firstName,
           gender: otherUser.gender,
           lastSeen: otherUser.lastSeen,
+          isLeyenda: otherUser.isLeyenda,
           avatarUrl: otherUser.photos[0]?.url ?? null,
         },
         lastMessage,
@@ -222,7 +225,11 @@ export class MatchesService {
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
-        select: { isLeyenda: true, dailyZumbidosLeft: true, coinsBalance: true },
+        select: {
+          isLeyenda: true,
+          dailyZumbidosLeft: true,
+          coinsBalance: true,
+        },
       });
 
       if (!user) {
