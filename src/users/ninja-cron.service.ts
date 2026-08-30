@@ -33,28 +33,7 @@ export class NinjaCronService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async resetDailyLeyendaPerks() {
-    try {
-      const result = await this.prisma.user.updateMany({
-        where: { isLeyenda: true },
-        data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 3 },
-      });
-
-      if (result.count > 0) {
-        this.logger.log(
-          `Perks diarios de Cuy Leyenda reiniciados para ${result.count} usuario(s)`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        'No se pudo reiniciar los perks diarios de Cuy Leyenda',
-        error as Error,
-      );
-    }
-  }
-
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron('0 0 * * *')
   async deactivateExpiredLeyenda() {
     try {
       const result = await this.prisma.user.updateMany({
@@ -78,6 +57,27 @@ export class NinjaCronService {
     } catch (error) {
       this.logger.error(
         'No se pudo procesar la expiración de Cuy Leyenda',
+        error as Error,
+      );
+    }
+  }
+
+  @Cron('5 0 * * *')
+  async resetDailyLeyendaPerks() {
+    try {
+      const result = await this.prisma.user.updateMany({
+        where: { isLeyenda: true },
+        data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 1 },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(
+          `Perks diarios de Cuy Leyenda reiniciados para ${result.count} usuario(s)`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'No se pudo reiniciar los perks diarios de Cuy Leyenda',
         error as Error,
       );
     }
