@@ -33,7 +33,7 @@ export class NinjaCronService {
     }
   }
 
-  @Cron('0 0 * * *')
+  @Cron('0 0 * * *', { timeZone: 'America/Bogota' })
   async deactivateExpiredLeyenda() {
     try {
       const result = await this.prisma.user.updateMany({
@@ -62,7 +62,7 @@ export class NinjaCronService {
     }
   }
 
-  @Cron('5 0 * * *')
+  @Cron('5 0 * * *', { timeZone: 'America/Bogota' })
   async resetDailyLeyendaPerks() {
     try {
       const result = await this.prisma.user.updateMany({
