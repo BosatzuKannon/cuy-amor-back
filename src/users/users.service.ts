@@ -212,7 +212,7 @@ export class UserService {
     await this.getOrCreateUser({ userId });
 
     try {
-      return await this.prisma.user.update({
+      await this.prisma.user.update({
         where: { id: userId },
         data: {
           birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
@@ -226,6 +226,13 @@ export class UserService {
           longitude: dto.longitude,
         },
       });
+
+      const updated = await this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        include: this.userInclude,
+      });
+
+      return this.serializeProfile(updated);
     } catch (error) {
       this.handlePrismaError(error, 'No se pudo actualizar el perfil');
     }
