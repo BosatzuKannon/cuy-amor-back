@@ -123,6 +123,9 @@ model User {
   giftsReceived        UserGift[]            @relation("ReceivedGifts")
 
   @@index([referralCode])
+  @@index([lastSeen])
+  @@index([createdAt])
+  @@index([city, interestedIn])
 }
 
 model Photo {

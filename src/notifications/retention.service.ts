@@ -143,16 +143,16 @@ export class RetentionService {
           if (n.city !== city) {
             return false;
           }
-          if (!interestedIn) {
+          if (!interestedIn || !n.gender) {
             return true;
           }
           if (interestedIn === 'BOTH') {
+            return n.gender === 'MALE' || n.gender === 'FEMALE';
+          }
+          if (interestedIn === 'WOMEN' && n.gender === 'FEMALE') {
             return true;
           }
-          if (interestedIn === 'WOMEN' && n.gender === 'WOMEN') {
-            return true;
-          }
-          if (interestedIn === 'MEN' && n.gender === 'MEN') {
+          if (interestedIn === 'MEN' && n.gender === 'MALE') {
             return true;
           }
           return false;
