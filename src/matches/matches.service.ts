@@ -3,11 +3,13 @@ import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const GIFT_RECEIVER_SHARE = 0.35;
@@ -25,7 +27,12 @@ const GIFT_RELATION_SELECT = {
 
 @Injectable()
 export class MatchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(MatchesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   private readonly messageSelect = {
     id: true,
@@ -192,7 +199,7 @@ export class MatchesService {
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         content,
         matchId,
@@ -202,6 +209,79 @@ export class MatchesService {
       },
       select: this.messageSelect,
     });
+
+    this.dispatchMessagePushNotification(matchId, userId, recipientId, {
+      content: message.content,
+      isSystemMessage: message.isSystemMessage,
+      giftId: message.gift?.id ?? null,
+    });
+
+    return message;
+  }
+
+  private dispatchMessagePushNotification(
+    matchId: string,
+    senderId: string,
+    recipientId: string,
+    message: {
+      content: string;
+      isSystemMessage?: boolean | null;
+      giftId?: string | null;
+    },
+  ): void {
+    void this.sendMessagePushNotification(
+      matchId,
+      senderId,
+      recipientId,
+      message,
+    ).catch(() => {
+      // Push notifications must never break the chat flow.
+    });
+  }
+
+  private async sendMessagePushNotification(
+    matchId: string,
+    senderId: string,
+    recipientId: string,
+    message: {
+      content: string;
+      isSystemMessage?: boolean | null;
+      giftId?: string | null;
+    },
+  ): Promise<void> {
+    try {
+      const sender = await this.prisma.user.findUnique({
+        where: { id: senderId },
+        select: { firstName: true },
+      });
+      const firstName = sender?.firstName?.trim() || 'Alguien';
+
+      let body: string;
+      if (message.giftId) {
+        body = 'Te ha enviado un regalo 🎁';
+      } else if (
+        message.isSystemMessage === true &&
+        /zumbido/i.test(message.content ?? '')
+      ) {
+        body = '¡Te ha enviado un Zumbido! 🐝';
+      } else {
+        const content = message.content ?? '';
+        body =
+          content.length > 100 ? `${content.slice(0, 100)}…` : content;
+      }
+
+      await this.notificationsService.sendPushNotification(
+        recipientId,
+        `Nuevo mensaje de ${firstName}`,
+        body,
+        { url: `cuyamor://chat/${matchId}` },
+      );
+    } catch (error) {
+      this.logger.error(
+        `[matches] push notification dispatch failed (match ${matchId}):`,
+        error,
+      );
+    }
   }
 
   async sendZumbido(matchId: string, userId: string) {
@@ -222,7 +302,7 @@ export class MatchesService {
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const message = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: {
@@ -281,6 +361,14 @@ export class MatchesService {
         select: this.messageSelect,
       });
     });
+
+    this.dispatchMessagePushNotification(matchId, userId, recipientId, {
+      content: message.content,
+      isSystemMessage: message.isSystemMessage,
+      giftId: message.gift?.id ?? null,
+    });
+
+    return message;
   }
 
   async sendGift(matchId: string, giftId: string, userId: string) {
@@ -299,7 +387,7 @@ export class MatchesService {
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const message = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const [gift, sender] = await Promise.all([
         tx.virtualGift.findUnique({
           where: { id: giftId },
@@ -399,5 +487,13 @@ export class MatchesService {
         select: this.messageSelect,
       });
     });
+
+    this.dispatchMessagePushNotification(matchId, userId, recipientId, {
+      content: message.content,
+      isSystemMessage: message.isSystemMessage,
+      giftId: message.gift?.id ?? null,
+    });
+
+    return message;
   }
 }

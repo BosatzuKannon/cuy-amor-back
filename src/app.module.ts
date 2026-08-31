@@ -10,6 +10,7 @@ import { GiftsModule } from './gifts/gifts.module';
 import { InteractionsModule } from './interactions/interactions.module';
 import { KeepAliveModule } from './keep-alive/keep-alive.module';
 import { MatchesModule } from './matches/matches.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UserModule } from './users/users.module';
@@ -26,6 +27,7 @@ import { WalletModule } from './wallet/wallet.module';
     UserModule,
     InteractionsModule,
     MatchesModule,
+    NotificationsModule,
     CoinPackagesModule,
     GiftsModule,
     TransactionsModule,
