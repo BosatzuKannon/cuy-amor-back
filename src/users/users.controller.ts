@@ -16,6 +16,7 @@ import { BlockUserDto, ReportUserDto } from './dto/block-report.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditProfileDto } from './dto/edit-profile.dto';
 import { AddPhotosDto } from './dto/photo.dto';
+import { RegisterDeviceDto } from './dto/register-device.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { VerifyLeyendaDto } from './dto/verify-leyenda.dto';
 import { UserService } from './users.service';
@@ -62,6 +63,14 @@ export class UserController {
     @Body() dto: UpdatePreferencesDto,
   ) {
     return this.usersService.updatePreferences(user.userId, dto);
+  }
+
+  @Post('me/devices')
+  async registerDevice(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RegisterDeviceDto,
+  ) {
+    return this.usersService.registerDevice(user.userId, dto);
   }
 
   @Post('photos')

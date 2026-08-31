@@ -14,6 +14,7 @@ import type { AuthenticatedUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncUserDto } from '../auth/sync-user.dto';
 import { AddPhotosDto } from './dto/photo.dto';
+import { RegisterDeviceDto } from './dto/register-device.dto';
 import { ReportUserDto } from './dto/block-report.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
@@ -288,6 +289,18 @@ export class UserService {
       dailyZumbidosLeft: user.dailyZumbidosLeft,
       dailyCuyazosLeft: user.dailyCuyazosLeft,
     };
+  }
+
+  async registerDevice(userId: string, dto: RegisterDeviceDto) {
+    return this.prisma.device.upsert({
+      where: { pushToken: dto.pushToken },
+      update: { userId },
+      create: {
+        pushToken: dto.pushToken,
+        platform: dto.platform,
+        userId,
+      },
+    });
   }
 
   async activateNinja(userId: string) {
