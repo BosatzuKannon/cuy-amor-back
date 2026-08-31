@@ -12,6 +12,13 @@ import { CreateInteractionDto } from './dto/create-interaction.dto';
 
 const SUPER_LIKE_COST = 15;
 
+export interface CreateInteractionResult {
+  success: boolean;
+  isMatch: boolean;
+  matchId: string | undefined;
+  newCoinBalance: number | undefined;
+}
+
 @Injectable()
 export class InteractionsService {
   constructor(
@@ -19,14 +26,17 @@ export class InteractionsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async createInteraction(fromUserId: string, dto: CreateInteractionDto) {
+  async createInteraction(
+    fromUserId: string,
+    dto: CreateInteractionDto,
+  ): Promise<CreateInteractionResult> {
     const { toUserId, type } = dto;
 
     if (fromUserId === toUserId) {
       throw new BadRequestException('No puedes interactuar contigo mismo');
     }
 
-    let result;
+    let result: CreateInteractionResult;
     try {
       result = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.interaction.findUnique({
@@ -52,7 +62,11 @@ export class InteractionsService {
         if (type === InteractionType.SUPER_LIKE) {
           const fromUser = await tx.user.findUnique({
             where: { id: fromUserId },
-            select: { isLeyenda: true, dailyCuyazosLeft: true, coinsBalance: true },
+            select: {
+              isLeyenda: true,
+              dailyCuyazosLeft: true,
+              coinsBalance: true,
+            },
           });
           if (!fromUser) {
             throw new NotFoundException('El usuario no existe');

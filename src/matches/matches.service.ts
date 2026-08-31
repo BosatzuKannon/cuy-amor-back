@@ -266,8 +266,7 @@ export class MatchesService {
         body = '¡Te ha enviado un Zumbido! 🐝';
       } else {
         const content = message.content ?? '';
-        body =
-          content.length > 100 ? `${content.slice(0, 100)}…` : content;
+        body = content.length > 100 ? `${content.slice(0, 100)}…` : content;
       }
 
       await this.notificationsService.sendPushNotification(
@@ -302,65 +301,67 @@ export class MatchesService {
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    const message = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: {
-          isLeyenda: true,
-          dailyZumbidosLeft: true,
-          coinsBalance: true,
-        },
-      });
-
-      if (!user) {
-        throw new NotFoundException('El usuario no existe');
-      }
-
-      const isFree = user.isLeyenda && user.dailyZumbidosLeft > 0;
-
-      if (!isFree && user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
-        throw new BadRequestException(
-          'Saldo insuficiente para enviar un zumbido',
-        );
-      }
-
-      if (isFree) {
-        await tx.user.update({
+    const message = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const user = await tx.user.findUnique({
           where: { id: userId },
-          data: { dailyZumbidosLeft: { decrement: 1 } },
-          select: { dailyZumbidosLeft: true },
-        });
-      } else {
-        await tx.user.update({
-          where: { id: userId },
-          data: { coinsBalance: { decrement: ZUMBIDO_COST_IN_COINS } },
-          select: { coinsBalance: true },
-        });
-
-        await tx.transaction.create({
-          data: {
-            reference: `CUY-${Date.now()}-${randomUUID()}`,
-            amountInCents: 0,
-            coinsAmount: -ZUMBIDO_COST_IN_COINS,
-            type: 'ZUMBIDO_SENT',
-            status: 'APPROVED',
-            userId,
+          select: {
+            isLeyenda: true,
+            dailyZumbidosLeft: true,
+            coinsBalance: true,
           },
-          select: { id: true },
         });
-      }
 
-      return tx.message.create({
-        data: {
-          content: 'ha enviado un zumbido',
-          matchId,
-          senderId: userId,
-          recipientId,
-          isSystemMessage: true,
-        },
-        select: this.messageSelect,
-      });
-    });
+        if (!user) {
+          throw new NotFoundException('El usuario no existe');
+        }
+
+        const isFree = user.isLeyenda && user.dailyZumbidosLeft > 0;
+
+        if (!isFree && user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
+          throw new BadRequestException(
+            'Saldo insuficiente para enviar un zumbido',
+          );
+        }
+
+        if (isFree) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { dailyZumbidosLeft: { decrement: 1 } },
+            select: { dailyZumbidosLeft: true },
+          });
+        } else {
+          await tx.user.update({
+            where: { id: userId },
+            data: { coinsBalance: { decrement: ZUMBIDO_COST_IN_COINS } },
+            select: { coinsBalance: true },
+          });
+
+          await tx.transaction.create({
+            data: {
+              reference: `CUY-${Date.now()}-${randomUUID()}`,
+              amountInCents: 0,
+              coinsAmount: -ZUMBIDO_COST_IN_COINS,
+              type: 'ZUMBIDO_SENT',
+              status: 'APPROVED',
+              userId,
+            },
+            select: { id: true },
+          });
+        }
+
+        return tx.message.create({
+          data: {
+            content: 'ha enviado un zumbido',
+            matchId,
+            senderId: userId,
+            recipientId,
+            isSystemMessage: true,
+          },
+          select: this.messageSelect,
+        });
+      },
+    );
 
     this.dispatchMessagePushNotification(matchId, userId, recipientId, {
       content: message.content,
@@ -387,106 +388,110 @@ export class MatchesService {
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    const message = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const [gift, sender] = await Promise.all([
-        tx.virtualGift.findUnique({
-          where: { id: giftId },
-          select: {
-            id: true,
-            name: true,
-            iconUrl: true,
-            coinCost: true,
-            cashValueCops: true,
-          },
-        }),
-        tx.user.findUnique({
-          where: { id: userId },
-          select: { coinsBalance: true },
-        }),
-      ]);
+    const message = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const [gift, sender] = await Promise.all([
+          tx.virtualGift.findUnique({
+            where: { id: giftId },
+            select: {
+              id: true,
+              name: true,
+              iconUrl: true,
+              coinCost: true,
+              cashValueCops: true,
+            },
+          }),
+          tx.user.findUnique({
+            where: { id: userId },
+            select: { coinsBalance: true },
+          }),
+        ]);
 
-      if (!gift) {
-        throw new NotFoundException('El regalo no existe');
-      }
+        if (!gift) {
+          throw new NotFoundException('El regalo no existe');
+        }
 
-      if (!sender) {
-        throw new NotFoundException('El usuario no existe');
-      }
+        if (!sender) {
+          throw new NotFoundException('El usuario no existe');
+        }
 
-      if (sender.coinsBalance < gift.coinCost) {
-        throw new BadRequestException(
-          'Saldo insuficiente para enviar este regalo',
+        if (sender.coinsBalance < gift.coinCost) {
+          throw new BadRequestException(
+            'Saldo insuficiente para enviar este regalo',
+          );
+        }
+
+        const receiverCut = Math.floor(
+          gift.cashValueCops * GIFT_RECEIVER_SHARE,
         );
-      }
+        const platformCut = gift.cashValueCops - receiverCut;
 
-      const receiverCut = Math.floor(gift.cashValueCops * GIFT_RECEIVER_SHARE);
-      const platformCut = gift.cashValueCops - receiverCut;
+        await tx.user.update({
+          where: { id: userId },
+          data: { coinsBalance: { decrement: gift.coinCost } },
+          select: { coinsBalance: true },
+        });
 
-      await tx.user.update({
-        where: { id: userId },
-        data: { coinsBalance: { decrement: gift.coinCost } },
-        select: { coinsBalance: true },
-      });
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: -gift.coinCost,
+            type: 'GIFT_SENT',
+            status: 'APPROVED',
+            userId,
+          },
+          select: { id: true },
+        });
 
-      await tx.transaction.create({
-        data: {
-          reference: `CUY-${Date.now()}-${randomUUID()}`,
-          amountInCents: 0,
-          coinsAmount: -gift.coinCost,
-          type: 'GIFT_SENT',
-          status: 'APPROVED',
-          userId,
-        },
-        select: { id: true },
-      });
+        await tx.user.update({
+          where: { id: recipientId },
+          data: { cashBalanceInCents: { increment: receiverCut } },
+          select: { id: true },
+        });
 
-      await tx.user.update({
-        where: { id: recipientId },
-        data: { cashBalanceInCents: { increment: receiverCut } },
-        select: { id: true },
-      });
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-${Date.now()}-${randomUUID()}`,
+            amountInCents: receiverCut,
+            coinsAmount: 0,
+            type: 'GIFT_RECEIVED',
+            status: 'APPROVED',
+            userId: recipientId,
+          },
+          select: { id: true },
+        });
 
-      await tx.transaction.create({
-        data: {
-          reference: `CUY-${Date.now()}-${randomUUID()}`,
-          amountInCents: receiverCut,
-          coinsAmount: 0,
-          type: 'GIFT_RECEIVED',
-          status: 'APPROVED',
-          userId: recipientId,
-        },
-        select: { id: true },
-      });
+        await tx.platformRevenue.create({
+          data: {
+            amountInCents: platformCut,
+            source: PLATFORM_REVENUE_SOURCE_GIFT_FEE,
+          },
+          select: { id: true },
+        });
 
-      await tx.platformRevenue.create({
-        data: {
-          amountInCents: platformCut,
-          source: PLATFORM_REVENUE_SOURCE_GIFT_FEE,
-        },
-        select: { id: true },
-      });
+        await tx.userGift.create({
+          data: {
+            giftId: gift.id,
+            senderId: userId,
+            receiverId: recipientId,
+          },
+          select: { id: true },
+        });
 
-      await tx.userGift.create({
-        data: {
-          giftId: gift.id,
-          senderId: userId,
-          receiverId: recipientId,
-        },
-        select: { id: true },
-      });
-
-      return tx.message.create({
-        data: {
-          content: 'ha enviado un regalo',
-          isSystemMessage: true,
-          matchId,
-          senderId: userId,
-          recipientId,
-          giftId: gift.id,
-        },
-        select: this.messageSelect,
-      });
-    });
+        return tx.message.create({
+          data: {
+            content: 'ha enviado un regalo',
+            isSystemMessage: true,
+            matchId,
+            senderId: userId,
+            recipientId,
+            giftId: gift.id,
+          },
+          select: this.messageSelect,
+        });
+      },
+    );
 
     this.dispatchMessagePushNotification(matchId, userId, recipientId, {
       content: message.content,
