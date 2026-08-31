@@ -27,6 +27,7 @@ const COIN_TRANSACTION_TYPES: TransactionType[] = [
 const REAL_MONEY_TRANSACTION_TYPES: TransactionType[] = [
   'VIP_SUBSCRIPTION',
   'REFERRAL_COMMISSION',
+  'GIFT_RECEIVED',
 ];
 
 type HistoryEntry = {
@@ -229,6 +230,7 @@ export class WalletService {
     const descs: Record<TransactionType, string> = {
       COIN_RECHARGE: 'Recarga de monedas',
       GIFT_SENT: 'Regalo enviado',
+      GIFT_RECEIVED: 'Regalo recibido',
       PRIORITY_MESSAGE: 'Mensaje prioritario',
       BOOST_PURCHASE: 'Compra de boost',
       REFERRAL_COMMISSION: 'Comisión de referido',
@@ -251,6 +253,7 @@ export class WalletService {
       VIP_SUBSCRIPTION: 'Suscripción Cuy Leyenda',
       REFERRAL_COMMISSION: 'Comisión de referido',
       GIFT_SENT: 'Regalo enviado',
+      GIFT_RECEIVED: 'Regalo recibido',
       PRIORITY_MESSAGE: 'Mensaje prioritario',
       BOOST_PURCHASE: 'Compra de boost',
       WELCOME_GIFT: 'Regalo de bienvenida',

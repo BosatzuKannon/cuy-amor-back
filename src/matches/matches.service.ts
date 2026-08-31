@@ -358,6 +358,18 @@ export class MatchesService {
         select: { id: true },
       });
 
+      await tx.transaction.create({
+        data: {
+          reference: `CUY-${Date.now()}-${randomUUID()}`,
+          amountInCents: receiverCut,
+          coinsAmount: 0,
+          type: 'GIFT_RECEIVED',
+          status: 'APPROVED',
+          userId: recipientId,
+        },
+        select: { id: true },
+      });
+
       await tx.platformRevenue.create({
         data: {
           amountInCents: platformCut,
