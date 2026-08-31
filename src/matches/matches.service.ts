@@ -21,7 +21,7 @@ const GIFT_RELATION_SELECT = {
     name: true,
     iconUrl: true,
     coinCost: true,
-    cashValueCops: true,
+    cashValueInCents: true,
   },
 } as const;
 
@@ -398,7 +398,7 @@ export class MatchesService {
               name: true,
               iconUrl: true,
               coinCost: true,
-              cashValueCops: true,
+              cashValueInCents: true,
             },
           }),
           tx.user.findUnique({
@@ -422,9 +422,9 @@ export class MatchesService {
         }
 
         const receiverCut = Math.floor(
-          gift.cashValueCops * GIFT_RECEIVER_SHARE,
+          gift.cashValueInCents * GIFT_RECEIVER_SHARE,
         );
-        const platformCut = gift.cashValueCops - receiverCut;
+        const platformCut = gift.cashValueInCents - receiverCut;
 
         await tx.user.update({
           where: { id: userId },

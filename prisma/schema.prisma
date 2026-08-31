@@ -87,7 +87,7 @@ model User {
   longitude          Float?
   coinsBalance       Int               @default(0)
   cashBalanceInCents Int               @default(0)
-  referralEarnings   Float             @default(0)
+  referralEarningsInCents Int          @default(0)
   isVerified         Boolean           @default(false)
   isNinja            Boolean           @default(false)
   ninjaExpiresAt     DateTime?
@@ -198,7 +198,7 @@ model VirtualGift {
   name          String
   iconUrl       String
   coinCost      Int
-  cashValueCops Int
+  cashValueInCents Int
   isActive      Boolean    @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

@@ -1144,7 +1144,7 @@ export class UserService {
       coinsBalance: user.coinsBalance,
       cashBalanceInCents: user.cashBalanceInCents,
       referralCode: user.referralCode,
-      referralEarnings: user.referralEarnings,
+      referralEarningsInCents: user.referralEarningsInCents,
       isNinja: user.isNinja,
       isLeyenda: user.isLeyenda,
       leyendaExpiresAt: user.leyendaExpiresAt,

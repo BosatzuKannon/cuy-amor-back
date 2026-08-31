@@ -165,13 +165,12 @@ export class WompiService {
 
             if (buyer?.referredById) {
               const commissionInCents = Math.floor(dbTx.amountInCents * 0.1);
-              const commissionInCop = Math.floor(commissionInCents / 100);
 
               await tx.user.update({
                 where: { id: buyer.referredById },
                 data: {
-                  referralEarnings: { increment: commissionInCop },
-                  cashBalanceInCents: { increment: commissionInCop },
+                  referralEarningsInCents: { increment: commissionInCents },
+                  cashBalanceInCents: { increment: commissionInCents },
                 },
               });
 
@@ -188,7 +187,7 @@ export class WompiService {
               referredById = buyer.referredById;
 
               this.logger.log(
-                `Referral commission of ${commissionInCents} cents (${commissionInCop} COP) credited to ${buyer.referredById} from buyer ${userId}`,
+                `Referral commission of ${commissionInCents} cents credited to ${buyer.referredById} from buyer ${userId}`,
               );
             }
           }

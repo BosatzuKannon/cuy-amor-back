@@ -7,7 +7,7 @@ const GIFT_SELECT = {
   name: true,
   iconUrl: true,
   coinCost: true,
-  cashValueCops: true,
+  cashValueInCents: true,
 } as const;
 
 @Injectable()
