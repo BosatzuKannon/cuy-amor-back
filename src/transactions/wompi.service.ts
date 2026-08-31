@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type WompiTransactionPayload = {
@@ -33,7 +34,10 @@ const REJECTED_STATUSES = new Set(['DECLINED', 'VOIDED', 'ERROR']);
 export class WompiService {
   private readonly logger = new Logger(WompiService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Procesa el evento `transaction.updated` de Wompi.
@@ -106,6 +110,8 @@ export class WompiService {
     userId: string,
     wompiTransactionId?: string,
   ): Promise<void> {
+    let referredById: string | undefined;
+
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.transaction.updateMany({
         where: { id: transactionId, status: 'PENDING' },
@@ -179,6 +185,8 @@ export class WompiService {
                 },
               });
 
+              referredById = buyer.referredById;
+
               this.logger.log(
                 `Referral commission of ${commissionInCents} cents (${commissionInCop} COP) credited to ${buyer.referredById} from buyer ${userId}`,
               );
@@ -187,6 +195,17 @@ export class WompiService {
         }
       }
     });
+
+    if (referredById) {
+      this.notifications
+        .sendPushNotification(
+          referredById,
+          '¡Comisión recibida! 💰',
+          '¡Dinero fresco! Tu referido acaba de recargar y ganaste tu comisión.',
+          { url: 'cuyamor://wallet' },
+        )
+        .catch(() => {});
+    }
   }
 
   /**

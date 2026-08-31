@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InteractionType, Prisma } from '@prisma/client';
 
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInteractionDto } from './dto/create-interaction.dto';
 
@@ -13,7 +14,10 @@ const SUPER_LIKE_COST = 15;
 
 @Injectable()
 export class InteractionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async createInteraction(fromUserId: string, dto: CreateInteractionDto) {
     const { toUserId, type } = dto;
@@ -22,8 +26,9 @@ export class InteractionsService {
       throw new BadRequestException('No puedes interactuar contigo mismo');
     }
 
+    let result;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      result = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.interaction.findUnique({
           where: {
             fromUserId_toUserId: { fromUserId, toUserId },
@@ -126,5 +131,20 @@ export class InteractionsService {
       }
       throw error;
     }
+
+    if (result.isMatch) {
+      const title = '¡Nuevo Match! 🎉';
+      const body = 'Tienes un nuevo match. ¡Rompe el hielo ahora!';
+      const data = { url: 'cuyamor://matches' };
+
+      this.notifications
+        .sendPushNotification(fromUserId, title, body, data)
+        .catch(() => {});
+      this.notifications
+        .sendPushNotification(toUserId, title, body, data)
+        .catch(() => {});
+    }
+
+    return result;
   }
 }
