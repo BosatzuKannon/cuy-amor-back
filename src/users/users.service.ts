@@ -981,6 +981,7 @@ export class UserService {
         gender: true,
         city: true,
         relationshipGoal: true,
+        interestedIn: true,
         hobbies: true,
         isLeyenda: true,
         latitude: true,
@@ -1016,6 +1017,7 @@ export class UserService {
       gender: candidate.gender,
       city: candidate.city,
       relationshipGoal: candidate.relationshipGoal,
+      interestedIn: candidate.interestedIn,
       hobbies: candidate.hobbies,
       isLeyenda: candidate.isLeyenda,
       photo: candidate.photos[0] ?? null,
@@ -1037,7 +1039,77 @@ export class UserService {
               ).toFixed(1),
             )
           : null,
-    }));
+        }));
+  }
+
+  async getPublicProfile(viewerId: string, targetUserId: string) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        firstName: true,
+        birthDate: true,
+        bio: true,
+        gender: true,
+        city: true,
+        relationshipGoal: true,
+        interestedIn: true,
+        hobbies: true,
+        isLeyenda: true,
+        latitude: true,
+        longitude: true,
+        photos: {
+          orderBy: { order: 'asc' },
+          select: { id: true, url: true },
+          take: MAX_PHOTOS,
+        },
+      },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Perfil no encontrado');
+    }
+
+    const viewer = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { latitude: true, longitude: true },
+    });
+
+    let distance: number | null = null;
+    if (
+      viewer?.latitude != null &&
+      viewer?.longitude != null &&
+      target.latitude != null &&
+      target.longitude != null
+    ) {
+      distance = Number(
+        this.haversineKm(
+          viewer.latitude,
+          viewer.longitude,
+          target.latitude,
+          target.longitude,
+        ).toFixed(1),
+      );
+    }
+
+    return {
+      id: target.id,
+      firstName: target.firstName,
+      birthDate: target.birthDate,
+      bio: target.bio,
+      gender: target.gender,
+      city: target.city,
+      relationshipGoal: target.relationshipGoal,
+      interestedIn: target.interestedIn,
+      hobbies: target.hobbies,
+      isLeyenda: target.isLeyenda,
+      photo: target.photos[0] ?? null,
+      photos: target.photos.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+      })),
+      distance,
+    };
   }
 
   private subtractYears(date: Date, years: number): Date {

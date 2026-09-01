@@ -36,6 +36,14 @@ export class UserController {
     return this.usersService.getBalance(user.userId);
   }
 
+  @Get(':userId/public-profile')
+  async getPublicProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ) {
+    return this.usersService.getPublicProfile(user.userId, userId);
+  }
+
   @Patch('profile')
   async completeProfile(
     @CurrentUser() user: AuthenticatedUser,
