@@ -138,6 +138,17 @@ export class UserService {
         data.lastName = dto.lastName;
       }
 
+      const inviteCode = (dto.invitedByCode ?? dto.referredBy)?.trim();
+      if (inviteCode && !existing.referredById) {
+        const referrer = await this.prisma.user.findUnique({
+          where: { referralCode: inviteCode.toUpperCase() },
+          select: { id: true },
+        });
+        if (referrer) {
+          data.referredBy = { connect: { id: referrer.id } };
+        }
+      }
+
       if (Object.keys(data).length === 0) {
         return existing;
       }
@@ -165,9 +176,10 @@ export class UserService {
         const referralCode = await this.generateReferralCode(tx);
 
         let referredById: string | null = null;
-        if (dto.referredBy) {
+        const inviteCode = (dto.invitedByCode ?? dto.referredBy)?.trim();
+        if (inviteCode) {
           const referrer = await tx.user.findUnique({
-            where: { referralCode: dto.referredBy },
+            where: { referralCode: inviteCode.toUpperCase() },
             select: { id: true },
           });
           if (referrer) {
@@ -219,7 +231,18 @@ export class UserService {
   }
 
   async updateProfile(userId: string, dto: CompleteProfileDto) {
-    await this.getOrCreateUser({ userId });
+    const user = await this.getOrCreateUser({ userId });
+
+    let referredBy: Prisma.UserUpdateOneWithoutReferralsNestedInput | undefined;
+    if (user && dto.invitedByCode && !user.referredById) {
+      const referrer = await this.prisma.user.findUnique({
+        where: { referralCode: dto.invitedByCode.trim().toUpperCase() },
+        select: { id: true },
+      });
+      if (referrer) {
+        referredBy = { connect: { id: referrer.id } };
+      }
+    }
 
     try {
       await this.prisma.user.update({
@@ -234,6 +257,7 @@ export class UserService {
           city: dto.city ?? 'Pasto',
           latitude: dto.latitude,
           longitude: dto.longitude,
+          ...(referredBy ? { referredBy } : {}),
         },
       });
 

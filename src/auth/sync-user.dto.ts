@@ -25,4 +25,9 @@ export class SyncUserDto {
   @IsString()
   @MaxLength(20)
   referredBy?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  invitedByCode?: string;
 }

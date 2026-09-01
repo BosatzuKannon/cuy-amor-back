@@ -81,6 +81,11 @@ export class CompleteProfileDto {
   @Min(-90)
   @Max(90)
   longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  invitedByCode?: string;
 }
 
 export { DEFAULT_CITY };
