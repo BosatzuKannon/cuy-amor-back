@@ -340,6 +340,8 @@ model SystemConfig {
   id               String   @id @default(uuid()) @db.Uuid
   key              String   @unique
   minVersionCode   Int      @default(1)
+  latestVersionCode Int     @default(1)
+  updateUrl        String   @default("market://details?id=com.bosatzu.frontcuyamor")
   appStatus        String   @default("ACTIVE")
   appStatusMessage String?
   createdAt        DateTime @default(now())

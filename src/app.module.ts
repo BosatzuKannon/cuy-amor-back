@@ -13,6 +13,7 @@ import { MatchesModule } from './matches/matches.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PayoutsModule } from './payouts/payouts.module';
+import { SystemConfigModule } from './system-config/system-config.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UserModule } from './users/users.module';
 import { WalletModule } from './wallet/wallet.module';
@@ -35,6 +36,7 @@ import { WalletModule } from './wallet/wallet.module';
     PayoutsModule,
     WalletModule,
     KeepAliveModule,
+    SystemConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
