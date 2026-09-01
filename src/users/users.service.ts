@@ -128,8 +128,17 @@ export class UserService {
       if (email && existing.email !== email) {
         data.email = email;
       }
+      if (dto.firstName && existing.firstName !== dto.firstName) {
+        data.firstName = dto.firstName;
+      }
+      if (
+        dto.lastName &&
+        dto.lastName !== (existing.lastName ?? '')
+      ) {
+        data.lastName = dto.lastName;
+      }
 
-      if (!data.googleId && !data.email) {
+      if (Object.keys(data).length === 0) {
         return existing;
       }
 
