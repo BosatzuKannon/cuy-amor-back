@@ -9,7 +9,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Gender, InterestedIn, Prisma } from '@prisma/client';
+import { Gender, InteractionType, InterestedIn, Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncUserDto } from '../auth/sync-user.dto';
@@ -28,6 +28,7 @@ const LEYENDA_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const LEYENDA_PRICE_IN_CENTS = 2499900;
 const LEYENDA_WELCOME_COINS = 100;
 const WELCOME_GIFT_COINS = 100;
+const HIGHLY_REQUESTED_THRESHOLD = 10;
 const REFERRAL_CODE_LENGTH = 8;
 const REFERRAL_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const MAX_REFERRAL_CODE_ATTEMPTS = 10;
@@ -1015,6 +1016,17 @@ export class UserService {
           select: { id: true, url: true },
           take: MAX_PHOTOS,
         },
+        _count: {
+          select: {
+            receivedInteractions: {
+              where: {
+                type: {
+                  in: [InteractionType.LIKE, InteractionType.SUPER_LIKE],
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -1044,6 +1056,8 @@ export class UserService {
       interestedIn: candidate.interestedIn,
       hobbies: candidate.hobbies,
       isLeyenda: candidate.isLeyenda,
+      isHighlyRequested:
+        candidate._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
       photo: candidate.photos[0] ?? null,
       photos: candidate.photos.map((photo) => ({
         id: photo.id,
@@ -1087,6 +1101,17 @@ export class UserService {
           select: { id: true, url: true },
           take: MAX_PHOTOS,
         },
+        _count: {
+          select: {
+            receivedInteractions: {
+              where: {
+                type: {
+                  in: [InteractionType.LIKE, InteractionType.SUPER_LIKE],
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1127,6 +1152,8 @@ export class UserService {
       interestedIn: target.interestedIn,
       hobbies: target.hobbies,
       isLeyenda: target.isLeyenda,
+      isHighlyRequested:
+        target._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
       photo: target.photos[0] ?? null,
       photos: target.photos.map((photo) => ({
         id: photo.id,
