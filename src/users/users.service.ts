@@ -140,16 +140,7 @@ export class UserService {
           include: this.userInclude,
         });
 
-        await tx.transaction.create({
-          data: {
-            reference: `CUY-WELCOME-${Date.now()}-${randomUUID()}`,
-            amountInCents: 0,
-            coinsAmount: WELCOME_GIFT_COINS,
-            type: 'WELCOME_GIFT',
-            status: 'APPROVED',
-            userId: user.id,
-          },
-        });
+        await this.createWelcomeGiftTransaction(tx, user.id, null);
 
         return user;
       });
@@ -187,20 +178,19 @@ export class UserService {
       if (dto.firstName && existing.firstName !== dto.firstName) {
         data.firstName = dto.firstName;
       }
-      if (
-        dto.lastName &&
-        dto.lastName !== (existing.lastName ?? '')
-      ) {
+      if (dto.lastName && dto.lastName !== (existing.lastName ?? '')) {
         data.lastName = dto.lastName;
       }
 
       const inviteCode = (dto.invitedByCode ?? dto.referredBy)?.trim();
+      let linkedReferrerId: string | null = null;
       if (inviteCode && !existing.referredById) {
         const referrer = await this.prisma.user.findUnique({
           where: { referralCode: inviteCode.toUpperCase() },
           select: { id: true },
         });
         if (referrer) {
+          linkedReferrerId = referrer.id;
           data.referredBy = { connect: { id: referrer.id } };
         }
       }
@@ -210,9 +200,21 @@ export class UserService {
       }
 
       try {
-        const updated = await this.prisma.user.update({
-          where: { id: authUser.userId },
-          data,
+        const updated = await this.prisma.$transaction(async (tx) => {
+          const synced = await tx.user.update({
+            where: { id: authUser.userId },
+            data,
+          });
+
+          if (linkedReferrerId && !existing.referredById) {
+            await this.attributeWelcomeGiftToReferral(
+              tx,
+              authUser.userId,
+              linkedReferrerId,
+            );
+          }
+
+          return synced;
         });
         return { ...existing, ...updated };
       } catch (error) {
@@ -260,16 +262,7 @@ export class UserService {
           },
         });
 
-        await tx.transaction.create({
-          data: {
-            reference: `CUY-WELCOME-${Date.now()}-${randomUUID()}`,
-            amountInCents: 0,
-            coinsAmount: WELCOME_GIFT_COINS,
-            type: 'WELCOME_GIFT',
-            status: 'APPROVED',
-            userId: user.id,
-          },
-        });
+        await this.createWelcomeGiftTransaction(tx, user.id, referredById);
 
         return user;
       });
@@ -290,31 +283,43 @@ export class UserService {
     const user = await this.getOrCreateUser({ userId });
 
     let referredBy: Prisma.UserUpdateOneWithoutReferralsNestedInput | undefined;
+    let referredByIdLinked: string | null = null;
     if (user && dto.invitedByCode && !user.referredById) {
       const referrer = await this.prisma.user.findUnique({
         where: { referralCode: dto.invitedByCode.trim().toUpperCase() },
         select: { id: true },
       });
       if (referrer) {
+        referredByIdLinked = referrer.id;
         referredBy = { connect: { id: referrer.id } };
       }
     }
 
     try {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-          gender: dto.gender,
-          interestedIn: dto.interestedIn,
-          relationshipGoal: dto.relationshipGoal,
-          hobbies: dto.hobbies ?? undefined,
-          bio: dto.bio,
-          city: dto.city ?? 'Pasto',
-          latitude: dto.latitude,
-          longitude: dto.longitude,
-          ...(referredBy ? { referredBy } : {}),
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+            gender: dto.gender,
+            interestedIn: dto.interestedIn,
+            relationshipGoal: dto.relationshipGoal,
+            hobbies: dto.hobbies ?? undefined,
+            bio: dto.bio,
+            city: dto.city ?? 'Pasto',
+            latitude: dto.latitude,
+            longitude: dto.longitude,
+            ...(referredBy ? { referredBy } : {}),
+          },
+        });
+
+        if (referredByIdLinked && !user?.referredById) {
+          await this.attributeWelcomeGiftToReferral(
+            tx,
+            userId,
+            referredByIdLinked,
+          );
+        }
       });
 
       const updated = await this.prisma.user.findUniqueOrThrow({
@@ -1270,7 +1275,7 @@ export class UserService {
               ).toFixed(1),
             )
           : null,
-        }));
+    }));
   }
 
   async getPublicProfile(viewerId: string, targetUserId: string) {
@@ -1499,6 +1504,50 @@ export class UserService {
         isProfile: photo.isProfile,
       })),
     };
+  }
+
+  private async createWelcomeGiftTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    referredById: string | null,
+  ): Promise<void> {
+    const reference = referredById
+      ? `CUY-REFERRAL-GIFT-${referredById}-${Date.now()}-${randomUUID()}`
+      : `CUY-WELCOME-${Date.now()}-${randomUUID()}`;
+
+    await tx.transaction.create({
+      data: {
+        reference,
+        amountInCents: 0,
+        coinsAmount: WELCOME_GIFT_COINS,
+        type: 'WELCOME_GIFT',
+        status: 'APPROVED',
+        userId,
+      },
+    });
+  }
+
+  private async attributeWelcomeGiftToReferral(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    referredById: string,
+  ): Promise<void> {
+    const existing = await tx.transaction.findFirst({
+      where: { userId, type: 'WELCOME_GIFT' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, reference: true },
+    });
+
+    if (!existing || existing.reference.startsWith('CUY-REFERRAL-GIFT')) {
+      return;
+    }
+
+    await tx.transaction.update({
+      where: { id: existing.id },
+      data: {
+        reference: `CUY-REFERRAL-GIFT-${referredById}-${Date.now()}-${randomUUID()}`,
+      },
+    });
   }
 
   private async generateReferralCode(
