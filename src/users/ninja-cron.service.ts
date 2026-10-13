@@ -63,21 +63,26 @@ export class NinjaCronService {
   }
 
   @Cron('5 0 * * *', { timeZone: 'America/Bogota' })
-  async resetDailyLeyendaPerks() {
+  async resetAllDailyPerks() {
     try {
-      const result = await this.prisma.user.updateMany({
+      const standardUsers = await this.prisma.user.updateMany({
+        where: { isLeyenda: false },
+        data: { dailyZumbidosLeft: 1, dailyCuyazosLeft: 0 },
+      });
+
+      const leyendaUsers = await this.prisma.user.updateMany({
         where: { isLeyenda: true },
         data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 1 },
       });
 
-      if (result.count > 0) {
+      if (standardUsers.count > 0 || leyendaUsers.count > 0) {
         this.logger.log(
-          `Perks diarios de Cuy Leyenda reiniciados para ${result.count} usuario(s)`,
+          `Perks diarios reiniciados para ${standardUsers.count} usuario(s) estándar y ${leyendaUsers.count} usuario(s) Cuy Leyenda`,
         );
       }
     } catch (error) {
       this.logger.error(
-        'No se pudo reiniciar los perks diarios de Cuy Leyenda',
+        'No se pudo reiniciar los perks diarios',
         error as Error,
       );
     }

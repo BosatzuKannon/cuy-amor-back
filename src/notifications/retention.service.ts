@@ -183,4 +183,46 @@ export class RetentionService {
       this.logger.error('Compatibility radar cron failed', error as Error);
     }
   }
+
+  @Cron('0 13 * * 1-5', { timeZone: 'America/Bogota' })
+  async weekdayZumbidoReminder() {
+    await this.sendFreeZumbidoReminders();
+  }
+
+  @Cron('0 19 * * 0,6', { timeZone: 'America/Bogota' })
+  async weekendZumbidoReminder() {
+    await this.sendFreeZumbidoReminders();
+  }
+
+  private async sendFreeZumbidoReminders() {
+    try {
+      const users = await this.prisma.user.findMany({
+        where: {
+          dailyZumbidosLeft: { gt: 0 },
+          preferences: { is: { pushNotifications: true } },
+        },
+        select: { id: true },
+      });
+
+      if (users.length === 0) {
+        return;
+      }
+
+      this.logger.log(
+        `Free zumbido reminder: sending to ${users.length} user(s)`,
+      );
+
+      const title = '🐝 ¡Tu Zumbido gratis está listo!';
+      const body = 'Entra a Cuy Amor y hazte notar.';
+      const data = { url: 'cuyamor://' };
+
+      for (const { id } of users) {
+        this.notifications
+          .sendPushNotification(id, title, body, data)
+          .catch(() => {});
+      }
+    } catch (error) {
+      this.logger.error('Free zumbido reminder cron failed', error as Error);
+    }
+  }
 }

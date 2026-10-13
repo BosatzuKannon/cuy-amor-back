@@ -306,7 +306,6 @@ export class MatchesService {
         const user = await tx.user.findUnique({
           where: { id: userId },
           select: {
-            isLeyenda: true,
             dailyZumbidosLeft: true,
             coinsBalance: true,
           },
@@ -316,7 +315,7 @@ export class MatchesService {
           throw new NotFoundException('El usuario no existe');
         }
 
-        const isFree = user.isLeyenda && user.dailyZumbidosLeft > 0;
+        const isFree = user.dailyZumbidosLeft > 0;
 
         if (!isFree && user.coinsBalance < ZUMBIDO_COST_IN_COINS) {
           throw new BadRequestException(
