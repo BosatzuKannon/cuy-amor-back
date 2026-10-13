@@ -4,6 +4,28 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 
+const BOGOTA_TIME_ZONE = 'America/Bogota';
+
+function bogotaDateKey(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: BOGOTA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function shiftBogotaDateKey(key: string, days: number): string {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function bogotaStartOfDay(key: string): Date {
+  return new Date(`${key}T00:00:00.000-05:00`);
+}
+
 @Injectable()
 export class RetentionService {
   private readonly logger = new Logger(RetentionService.name);
@@ -223,6 +245,83 @@ export class RetentionService {
       }
     } catch (error) {
       this.logger.error('Free zumbido reminder cron failed', error as Error);
+    }
+  }
+
+  @Cron('0 22 * * *', { timeZone: 'America/Bogota' })
+  async streakWarningReminder() {
+    try {
+      const todayKey = bogotaDateKey(new Date());
+      const yesterdayStart = bogotaStartOfDay(shiftBogotaDateKey(todayKey, -1));
+      const todayStart = bogotaStartOfDay(todayKey);
+
+      const users = await this.prisma.user.findMany({
+        where: {
+          currentStreak: { gt: 0 },
+          lastStreakClaimDate: { gte: yesterdayStart, lt: todayStart },
+          preferences: { is: { pushNotifications: true } },
+        },
+        select: { id: true },
+      });
+
+      this.sendPushToUsers(
+        users.map((user) => user.id),
+        '🔥 ¡Tu racha está en peligro!',
+        'Te quedan menos de 2 horas. Entra a Cuy Amor y salva tu progreso de hoy.',
+        'Streak warning reminder',
+      );
+    } catch (error) {
+      this.logger.error('Streak warning reminder cron failed', error as Error);
+    }
+  }
+
+  @Cron('0 10 * * *', { timeZone: 'America/Bogota' })
+  async streakLostNotification() {
+    try {
+      const todayKey = bogotaDateKey(new Date());
+      const twoDaysAgoStart = bogotaStartOfDay(
+        shiftBogotaDateKey(todayKey, -2),
+      );
+      const yesterdayStart = bogotaStartOfDay(shiftBogotaDateKey(todayKey, -1));
+
+      const users = await this.prisma.user.findMany({
+        where: {
+          currentStreak: { gt: 1 },
+          lastStreakClaimDate: { gte: twoDaysAgoStart, lt: yesterdayStart },
+          preferences: { is: { pushNotifications: true } },
+        },
+        select: { id: true },
+      });
+
+      this.sendPushToUsers(
+        users.map((user) => user.id),
+        '💔 Perdiste tu racha...',
+        'Pero hoy es un gran día para volver a empezar. ¡Entra y reclama tus 5 Cuy Coins!',
+        'Streak lost notification',
+      );
+    } catch (error) {
+      this.logger.error('Streak lost notification cron failed', error as Error);
+    }
+  }
+
+  private sendPushToUsers(
+    userIds: string[],
+    title: string,
+    body: string,
+    logLabel: string,
+  ) {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    this.logger.log(`${logLabel}: sending to ${userIds.length} user(s)`);
+
+    const data = { url: 'cuyamor://' };
+
+    for (const id of userIds) {
+      this.notifications
+        .sendPushNotification(id, title, body, data)
+        .catch(() => {});
     }
   }
 }

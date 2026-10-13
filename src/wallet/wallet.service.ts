@@ -22,6 +22,7 @@ const COIN_TRANSACTION_TYPES: TransactionType[] = [
   'VIP_SUBSCRIPTION',
   'BOOST_PURCHASE',
   'PRIORITY_MESSAGE',
+  'STREAK_REWARD',
 ];
 
 const REAL_MONEY_TRANSACTION_TYPES: TransactionType[] = [
@@ -239,6 +240,7 @@ export class WalletService {
       NINJA_ACTIVATED: 'Modo Ninja activado',
       ZUMBIDO_SENT: 'Zumbido enviado',
       VIP_SUBSCRIPTION: 'Suscripción Cuy Leyenda',
+      STREAK_REWARD: 'Recompensa de racha diaria',
     };
     const base = descs[type] ?? type;
     if (coinsAmount !== null && coinsAmount !== 0) {
@@ -260,6 +262,7 @@ export class WalletService {
       WELCOME_GIFT: 'Regalo de bienvenida',
       NINJA_ACTIVATED: 'Modo Ninja activado',
       ZUMBIDO_SENT: 'Zumbido enviado',
+      STREAK_REWARD: 'Recompensa de racha diaria',
     };
     return descs[type] ?? type;
   }

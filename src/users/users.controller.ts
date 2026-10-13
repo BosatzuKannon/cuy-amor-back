@@ -89,6 +89,11 @@ export class UserController {
     return this.usersService.addPhotos(user.userId, dto);
   }
 
+  @Post('streak/claim')
+  async claimDailyStreak(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.claimDailyStreak(user.userId);
+  }
+
   @Post('ninja/activate')
   async activateNinja(@CurrentUser() user: AuthenticatedUser) {
     return this.usersService.activateNinja(user.userId);

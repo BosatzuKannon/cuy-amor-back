@@ -36,6 +36,61 @@ const DEFAULT_MAX_DISTANCE_KM = 50;
 const DEFAULT_MIN_AGE_PREFERENCE = 18;
 const DEFAULT_MAX_AGE_PREFERENCE = 99;
 const EARTH_RADIUS_KM = 6371;
+const STREAK_TIME_ZONE = 'America/Bogota';
+const STREAK_LOOP_DAYS = 7;
+const HOURS_MS = 60 * 60 * 1000;
+
+type StreakLoopReward = {
+  coins?: number;
+  zumbidos?: number;
+  ninjaHours?: number;
+  leyendaHours?: number;
+  label: string;
+};
+
+const STREAK_LOOP_REWARDS: Record<number, StreakLoopReward> = {
+  1: { coins: 5, label: '+5 Cuy Coins' },
+  2: { coins: 10, label: '+10 Cuy Coins' },
+  3: { ninjaHours: 24, label: '24h de Modo Cuy Ninja' },
+  4: { coins: 15, label: '+15 Cuy Coins' },
+  5: { zumbidos: 1, label: '+1 Zumbido gratis' },
+  6: { coins: 20, label: '+20 Cuy Coins' },
+  7: { leyendaHours: 24, label: '24h de Cuy Leyenda' },
+};
+
+const STREAK_MILESTONES: Record<number, StreakLoopReward> = {
+  30: { coins: 100, label: '+100 Cuy Coins (30 días)' },
+  100: {
+    coins: 300,
+    leyendaHours: 3 * 24,
+    label: '+300 Cuy Coins y 3 días de Cuy Leyenda (100 días)',
+  },
+  365: { leyendaHours: 30 * 24, label: '1 mes de Cuy Leyenda (365 días)' },
+  730: {
+    coins: 1000,
+    leyendaHours: 60 * 24,
+    label: '+1000 Cuy Coins y 2 meses de Cuy Leyenda (730 días)',
+  },
+};
+
+function bogotaDayNumber(date: Date): number {
+  const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: STREAK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(date)
+    .split('-')
+    .map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
+}
+
+function streakLoopDay(currentStreak: number): number {
+  return currentStreak % STREAK_LOOP_DAYS === 0
+    ? STREAK_LOOP_DAYS
+    : currentStreak % STREAK_LOOP_DAYS;
+}
 
 type UserWithRelations = Prisma.UserGetPayload<{
   include: {
@@ -323,6 +378,144 @@ export class UserService {
       dailyZumbidosLeft: user.dailyZumbidosLeft,
       dailyCuyazosLeft: user.dailyCuyazosLeft,
     };
+  }
+
+  async claimDailyStreak(userId: string) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          currentStreak: true,
+          longestStreak: true,
+          lastStreakClaimDate: true,
+          coinsBalance: true,
+          dailyZumbidosLeft: true,
+          isNinja: true,
+          ninjaExpiresAt: true,
+          isLeyenda: true,
+          leyendaExpiresAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
+      const today = bogotaDayNumber(new Date());
+      const lastClaim = user.lastStreakClaimDate
+        ? bogotaDayNumber(user.lastStreakClaimDate)
+        : null;
+
+      if (lastClaim === today) {
+        return {
+          claimed: false,
+          currentStreak: user.currentStreak,
+          longestStreak: user.longestStreak,
+          loopDay:
+            user.currentStreak > 0 ? streakLoopDay(user.currentStreak) : 0,
+          rewards: {
+            coins: 0,
+            zumbidos: 0,
+            ninjaHours: 0,
+            leyendaHours: 0,
+            items: [],
+          },
+          coinsBalance: user.coinsBalance,
+          dailyZumbidosLeft: user.dailyZumbidosLeft,
+          isNinja: user.isNinja,
+          isLeyenda: user.isLeyenda,
+        };
+      }
+
+      const currentStreak =
+        lastClaim !== null && lastClaim === today - 1
+          ? user.currentStreak + 1
+          : 1;
+
+      const loopDay = streakLoopDay(currentStreak);
+      const loopReward = STREAK_LOOP_REWARDS[loopDay];
+      const milestone = STREAK_MILESTONES[currentStreak];
+
+      let coins = loopReward.coins ?? 0;
+      const zumbidos = loopReward.zumbidos ?? 0;
+      const ninjaHours = loopReward.ninjaHours ?? 0;
+      let leyendaHours = loopReward.leyendaHours ?? 0;
+      const items: string[] = [loopReward.label];
+
+      if (milestone) {
+        coins += milestone.coins ?? 0;
+        leyendaHours += milestone.leyendaHours ?? 0;
+        items.push(milestone.label);
+      }
+
+      const now = Date.now();
+      const data: Prisma.UserUpdateInput = {
+        currentStreak,
+        longestStreak: Math.max(user.longestStreak, currentStreak),
+        lastStreakClaimDate: new Date(),
+      };
+
+      if (coins > 0) {
+        data.coinsBalance = { increment: coins };
+      }
+      if (zumbidos > 0) {
+        data.dailyZumbidosLeft = { increment: zumbidos };
+      }
+      if (ninjaHours > 0) {
+        const base =
+          user.isNinja && user.ninjaExpiresAt
+            ? Math.max(user.ninjaExpiresAt.getTime(), now)
+            : now;
+        data.isNinja = true;
+        data.ninjaExpiresAt = new Date(base + ninjaHours * HOURS_MS);
+      }
+      if (leyendaHours > 0) {
+        const base =
+          user.isLeyenda && user.leyendaExpiresAt
+            ? Math.max(user.leyendaExpiresAt.getTime(), now)
+            : now;
+        data.isLeyenda = true;
+        data.leyendaExpiresAt = new Date(base + leyendaHours * HOURS_MS);
+      }
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data,
+        select: {
+          currentStreak: true,
+          longestStreak: true,
+          coinsBalance: true,
+          dailyZumbidosLeft: true,
+          isNinja: true,
+          isLeyenda: true,
+        },
+      });
+
+      if (coins > 0) {
+        await tx.transaction.create({
+          data: {
+            reference: `CUY-STREAK-${Date.now()}-${randomUUID()}`,
+            amountInCents: 0,
+            coinsAmount: coins,
+            type: 'STREAK_REWARD',
+            status: 'APPROVED',
+            userId,
+          },
+        });
+      }
+
+      return {
+        claimed: true,
+        currentStreak: updated.currentStreak,
+        longestStreak: updated.longestStreak,
+        loopDay,
+        rewards: { coins, zumbidos, ninjaHours, leyendaHours, items },
+        coinsBalance: updated.coinsBalance,
+        dailyZumbidosLeft: updated.dailyZumbidosLeft,
+        isNinja: updated.isNinja,
+        isLeyenda: updated.isLeyenda,
+      };
+    });
   }
 
   async registerDevice(userId: string, dto: RegisterDeviceDto) {
@@ -1283,6 +1476,8 @@ export class UserService {
       leyendaDaysLeft,
       dailyZumbidosLeft: user.dailyZumbidosLeft,
       dailyCuyazosLeft: user.dailyCuyazosLeft,
+      currentStreak: user.currentStreak,
+      longestStreak: user.longestStreak,
       ninjaDaysLeft,
       preferences: user.preferences
         ? {
