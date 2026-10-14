@@ -1148,6 +1148,7 @@ export class UserService {
       select: {
         latitude: true,
         longitude: true,
+        gender: true,
         interestedIn: true,
         preferences: true,
       },
@@ -1164,35 +1165,66 @@ export class UserService {
     const maxAgePreference =
       preferences?.maxAgePreference ?? DEFAULT_MAX_AGE_PREFERENCE;
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const now = new Date();
     const minBirthDate = this.subtractYears(now, maxAgePreference);
     const maxBirthDate = this.subtractYears(now, minAgePreference);
 
-    const where: Prisma.UserWhereInput = {
-      id: { not: userId },
-      isNinja: false,
-      birthDate: { gte: minBirthDate, lte: maxBirthDate },
-      receivedInteractions: {
-        none: { fromUserId: userId },
-      },
-    };
+    const birthDateCondition: Prisma.UserWhereInput = isProduction
+      ? { birthDate: { gte: minBirthDate, lte: maxBirthDate } }
+      : {
+          OR: [
+            { birthDate: null },
+            { birthDate: { gte: minBirthDate, lte: maxBirthDate } },
+          ],
+        };
 
-    if (user.interestedIn && user.interestedIn !== InterestedIn.BOTH) {
-      where.gender =
-        user.interestedIn === InterestedIn.WOMEN ? Gender.FEMALE : Gender.MALE;
+    const conditions: Prisma.UserWhereInput[] = [
+      { id: { not: userId } },
+      { isNinja: false },
+      birthDateCondition,
+      {
+        receivedInteractions: {
+          none: { fromUserId: userId },
+        },
+      },
+    ];
+
+    const allowedGenders = this.gendersForInterest(user.interestedIn);
+    if (allowedGenders.length > 0) {
+      conditions.push({ gender: { in: allowedGenders } });
+    }
+
+    const allowedInterests = this.interestsForGender(user.gender);
+    if (allowedInterests.length > 0) {
+      conditions.push({ interestedIn: { in: allowedInterests } });
     }
 
     const { latitude, longitude } = user;
+    if (isProduction) {
+      conditions.push({ latitude: { not: null } });
+      conditions.push({ longitude: { not: null } });
+    }
+
     if (latitude != null && longitude != null) {
       const latDelta = maxDistanceKm / 111.32;
       const lngDelta =
         maxDistanceKm / (111.32 * Math.cos((latitude * Math.PI) / 180));
-      where.latitude = { gte: latitude - latDelta, lte: latitude + latDelta };
-      where.longitude = {
-        gte: longitude - lngDelta,
-        lte: longitude + lngDelta,
+      const boundingBox: Prisma.UserWhereInput = {
+        latitude: { gte: latitude - latDelta, lte: latitude + latDelta },
+        longitude: { gte: longitude - lngDelta, lte: longitude + lngDelta },
       };
+      conditions.push(
+        isProduction
+          ? boundingBox
+          : {
+              OR: [{ latitude: null }, { longitude: null }, boundingBox],
+            },
+      );
     }
+
+    const where: Prisma.UserWhereInput = { AND: conditions };
 
     let candidates = await this.prisma.user.findMany({
       where,
@@ -1230,17 +1262,19 @@ export class UserService {
     });
 
     if (latitude != null && longitude != null) {
-      candidates = candidates.filter(
-        (candidate) =>
-          candidate.latitude != null &&
-          candidate.longitude != null &&
+      candidates = candidates.filter((candidate) => {
+        if (candidate.latitude == null || candidate.longitude == null) {
+          return !isProduction;
+        }
+        return (
           this.haversineKm(
             latitude,
             longitude,
             candidate.latitude,
             candidate.longitude,
-          ) <= maxDistanceKm,
-      );
+          ) <= maxDistanceKm
+        );
+      });
     }
 
     return candidates.map((candidate) => ({
@@ -1359,6 +1393,30 @@ export class UserService {
       })),
       distance,
     };
+  }
+
+  private gendersForInterest(interestedIn: InterestedIn | null): Gender[] {
+    switch (interestedIn) {
+      case InterestedIn.WOMEN:
+        return [Gender.FEMALE];
+      case InterestedIn.MEN:
+        return [Gender.MALE];
+      case InterestedIn.BOTH:
+        return [Gender.FEMALE, Gender.MALE];
+      default:
+        return [];
+    }
+  }
+
+  private interestsForGender(gender: Gender | null): InterestedIn[] {
+    switch (gender) {
+      case Gender.MALE:
+        return [InterestedIn.MEN, InterestedIn.BOTH];
+      case Gender.FEMALE:
+        return [InterestedIn.WOMEN, InterestedIn.BOTH];
+      default:
+        return [];
+    }
   }
 
   private subtractYears(date: Date, years: number): Date {
