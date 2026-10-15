@@ -11,9 +11,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChangeInteractionDto } from './dto/change-interaction.dto';
 import { CreateInteractionDto } from './dto/create-interaction.dto';
+import { GetInteractionHistoryQueryDto } from './dto/get-interaction-history-query.dto';
 
 const SUPER_LIKE_COST = 15;
-const HISTORY_LIMIT = 50;
+const HISTORY_DEFAULT_LIMIT = 20;
+const HISTORY_MAX_LIMIT = 50;
 const MAX_PHOTOS = 3;
 const HIGHLY_REQUESTED_THRESHOLD = 10;
 const EARTH_RADIUS_KM = 6371;
@@ -162,7 +164,10 @@ export class InteractionsService {
     return result;
   }
 
-  async getInteractionHistory(userId: string) {
+  async getInteractionHistory(
+    userId: string,
+    query: GetInteractionHistoryQueryDto,
+  ) {
     const viewer = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { latitude: true, longitude: true },
@@ -171,10 +176,17 @@ export class InteractionsService {
       throw new NotFoundException('El usuario no existe');
     }
 
+    const limit = Math.min(
+      Math.max(query.limit ?? HISTORY_DEFAULT_LIMIT, 1),
+      HISTORY_MAX_LIMIT,
+    );
+    const { cursor } = query;
+
     const interactions = await this.prisma.interaction.findMany({
       where: { fromUserId: userId },
-      orderBy: { createdAt: 'desc' },
-      take: HISTORY_LIMIT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
         type: true,
@@ -214,7 +226,11 @@ export class InteractionsService {
       },
     });
 
-    return interactions.map((interaction) => {
+    const hasMore = interactions.length > limit;
+    const page = hasMore ? interactions.slice(0, limit) : interactions;
+    const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+    const data = page.map((interaction) => {
       const target = interaction.toUser;
       const distance =
         viewer.latitude != null &&
@@ -257,6 +273,8 @@ export class InteractionsService {
         },
       };
     });
+
+    return { data, nextCursor, hasMore };
   }
 
   async changeInteraction(

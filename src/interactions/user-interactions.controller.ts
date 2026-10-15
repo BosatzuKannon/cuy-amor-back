@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChangeInteractionDto } from './dto/change-interaction.dto';
+import { GetInteractionHistoryQueryDto } from './dto/get-interaction-history-query.dto';
 import {
   InteractionsService,
   type ChangeInteractionResult,
@@ -15,8 +16,11 @@ export class UserInteractionsController {
   constructor(private readonly interactionsService: InteractionsService) {}
 
   @Get('history')
-  async history(@CurrentUser() user: AuthenticatedUser) {
-    return this.interactionsService.getInteractionHistory(user.userId);
+  async history(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: GetInteractionHistoryQueryDto,
+  ) {
+    return this.interactionsService.getInteractionHistory(user.userId, query);
   }
 
   @Put('change')
