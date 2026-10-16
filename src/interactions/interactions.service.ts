@@ -159,6 +159,8 @@ export class InteractionsService {
 
     if (result.isMatch && matchedNow) {
       this.notifyNewMatch(fromUserId, toUserId);
+    } else if (!result.isMatch) {
+      void this.notifyNewLike(toUserId);
     }
 
     return result;
@@ -277,6 +279,130 @@ export class InteractionsService {
     return { data, nextCursor, hasMore };
   }
 
+  async getWhoLikesMe(userId: string, query: GetInteractionHistoryQueryDto) {
+    const viewer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { latitude: true, longitude: true },
+    });
+    if (!viewer) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    const limit = Math.min(
+      Math.max(query.limit ?? HISTORY_DEFAULT_LIMIT, 1),
+      HISTORY_MAX_LIMIT,
+    );
+    const { cursor } = query;
+
+    const likeFilter: Prisma.InteractionWhereInput = {
+      toUserId: userId,
+      type: { in: [InteractionType.LIKE, InteractionType.SUPER_LIKE] },
+      fromUser: {
+        isNinja: false,
+        receivedInteractions: { none: { fromUserId: userId } },
+        blocksGiven: { none: { blockedId: userId } },
+        blocksReceived: { none: { blockerId: userId } },
+      },
+    };
+
+    const [likes, total] = await Promise.all([
+      this.prisma.interaction.findMany({
+        where: likeFilter,
+        orderBy: [{ type: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        select: {
+          id: true,
+          type: true,
+          createdAt: true,
+          fromUser: {
+            select: {
+              id: true,
+              firstName: true,
+              birthDate: true,
+              bio: true,
+              gender: true,
+              city: true,
+              relationshipGoal: true,
+              interestedIn: true,
+              hobbies: true,
+              isLeyenda: true,
+              latitude: true,
+              longitude: true,
+              photos: {
+                orderBy: { order: 'asc' },
+                select: { id: true, url: true },
+                take: MAX_PHOTOS,
+              },
+              _count: {
+                select: {
+                  receivedInteractions: {
+                    where: {
+                      type: {
+                        in: [InteractionType.LIKE, InteractionType.SUPER_LIKE],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.interaction.count({ where: likeFilter }),
+    ]);
+
+    const hasMore = likes.length > limit;
+    const page = hasMore ? likes.slice(0, limit) : likes;
+    const nextCursor = hasMore ? page[page.length - 1].id : null;
+
+    const data = page.map((interaction) => {
+      const liker = interaction.fromUser;
+      const distance =
+        viewer.latitude != null &&
+        viewer.longitude != null &&
+        liker.latitude != null &&
+        liker.longitude != null
+          ? Number(
+              this.haversineKm(
+                viewer.latitude,
+                viewer.longitude,
+                liker.latitude,
+                liker.longitude,
+              ).toFixed(1),
+            )
+          : null;
+
+      return {
+        id: interaction.id,
+        type: interaction.type,
+        createdAt: interaction.createdAt,
+        liker: {
+          id: liker.id,
+          firstName: liker.firstName,
+          birthDate: liker.birthDate,
+          bio: liker.bio,
+          gender: liker.gender,
+          city: liker.city,
+          relationshipGoal: liker.relationshipGoal,
+          interestedIn: liker.interestedIn,
+          hobbies: liker.hobbies,
+          isLeyenda: liker.isLeyenda,
+          isHighlyRequested:
+            liker._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
+          distance,
+          photo: liker.photos[0] ?? null,
+          photos: liker.photos.map((photo) => ({
+            id: photo.id,
+            url: photo.url,
+          })),
+        },
+      };
+    });
+
+    return { data, nextCursor, hasMore, total };
+  }
+
   async changeInteraction(
     userId: string,
     dto: ChangeInteractionDto,
@@ -356,6 +482,13 @@ export class InteractionsService {
 
     if (result.isMatch && matchedNow) {
       this.notifyNewMatch(userId, targetUserId);
+    } else if (
+      result.previousType === InteractionType.PASS &&
+      (result.type === InteractionType.LIKE ||
+        result.type === InteractionType.SUPER_LIKE) &&
+      !result.isMatch
+    ) {
+      void this.notifyNewLike(targetUserId);
     }
 
     return result;
@@ -405,6 +538,27 @@ export class InteractionsService {
     this.notifications
       .sendPushNotification(userBId, title, body, data)
       .catch(() => {});
+  }
+
+  private async notifyNewLike(toUserId: string): Promise<void> {
+    try {
+      const preference = await this.prisma.userPreference.findUnique({
+        where: { userId: toUserId },
+        select: { pushNotifications: true },
+      });
+      if (preference && preference.pushNotifications === false) {
+        return;
+      }
+
+      await this.notifications.sendPushNotification(
+        toUserId,
+        '¡Alguien te ha echado el ojo! 👀',
+        'Tienes un nuevo pretendiente. ¡Descúbrelo!',
+        { url: 'cuyamor://who-likes-you' },
+      );
+    } catch {
+      // Notification failures must never break the interaction flow.
+    }
   }
 
   private haversineKm(

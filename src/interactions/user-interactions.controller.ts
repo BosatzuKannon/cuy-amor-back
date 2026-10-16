@@ -23,6 +23,14 @@ export class UserInteractionsController {
     return this.interactionsService.getInteractionHistory(user.userId, query);
   }
 
+  @Get('who-likes-me')
+  async whoLikesMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: GetInteractionHistoryQueryDto,
+  ) {
+    return this.interactionsService.getWhoLikesMe(user.userId, query);
+  }
+
   @Put('change')
   async change(
     @CurrentUser() user: AuthenticatedUser,
