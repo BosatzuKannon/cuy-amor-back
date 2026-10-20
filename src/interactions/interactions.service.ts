@@ -33,6 +33,7 @@ export interface ChangeInteractionResult {
   type: InteractionType;
   isMatch: boolean;
   matchId: string | undefined;
+  newCoinBalance: number | undefined;
 }
 
 type MatchResolution = {
@@ -83,43 +84,7 @@ export class InteractionsService {
 
         let newCoinBalance: number | undefined;
         if (type === InteractionType.SUPER_LIKE) {
-          const fromUser = await tx.user.findUnique({
-            where: { id: fromUserId },
-            select: {
-              isLeyenda: true,
-              dailyCuyazosLeft: true,
-              coinsBalance: true,
-            },
-          });
-          if (!fromUser) {
-            throw new NotFoundException('El usuario no existe');
-          }
-
-          const isFree = fromUser.isLeyenda && fromUser.dailyCuyazosLeft > 0;
-
-          if (isFree) {
-            await tx.user.update({
-              where: { id: fromUserId },
-              data: { dailyCuyazosLeft: { decrement: 1 } },
-              select: { dailyCuyazosLeft: true },
-            });
-            newCoinBalance = fromUser.coinsBalance;
-          } else {
-            const result = await tx.user.updateMany({
-              where: { id: fromUserId, coinsBalance: { gte: SUPER_LIKE_COST } },
-              data: { coinsBalance: { decrement: SUPER_LIKE_COST } },
-            });
-            if (result.count === 0) {
-              throw new BadRequestException(
-                'Saldo insuficiente para enviar un Cuyazo',
-              );
-            }
-            const updated = await tx.user.findUnique({
-              where: { id: fromUserId },
-              select: { coinsBalance: true },
-            });
-            newCoinBalance = updated?.coinsBalance;
-          }
+          newCoinBalance = await this.chargeSuperLike(tx, fromUserId);
         }
 
         await tx.interaction.create({
@@ -451,6 +416,7 @@ export class InteractionsService {
           type: newActionType,
           isMatch: false,
           matchId: undefined as string | undefined,
+          newCoinBalance: undefined as number | undefined,
         };
       }
 
@@ -458,6 +424,11 @@ export class InteractionsService {
         where: { id: existing.id },
         data: { type: newActionType },
       });
+
+      let newCoinBalance: number | undefined;
+      if (newActionType === InteractionType.SUPER_LIKE) {
+        newCoinBalance = await this.chargeSuperLike(tx, userId);
+      }
 
       let isMatch = false;
       let matchId: string | undefined;
@@ -477,6 +448,7 @@ export class InteractionsService {
         type: newActionType,
         isMatch,
         matchId,
+        newCoinBalance,
       };
     });
 
@@ -492,6 +464,50 @@ export class InteractionsService {
     }
 
     return result;
+  }
+
+  /**
+   * Cobra un Cuyazo: consume primero el cupo diario gratis de Leyenda
+   * (de forma atómica) y, si no hay cupo, descuenta 15 Cuy Coins.
+   * Devuelve el nuevo balance de monedas.
+   */
+  private async chargeSuperLike(
+    tx: Prisma.TransactionClient,
+    fromUserId: string,
+  ): Promise<number> {
+    const fromUser = await tx.user.findUnique({
+      where: { id: fromUserId },
+      select: { coinsBalance: true },
+    });
+    if (!fromUser) {
+      throw new NotFoundException('El usuario no existe');
+    }
+
+    const freeUse = await tx.user.updateMany({
+      where: {
+        id: fromUserId,
+        isLeyenda: true,
+        dailyCuyazosLeft: { gt: 0 },
+      },
+      data: { dailyCuyazosLeft: { decrement: 1 } },
+    });
+    if (freeUse.count > 0) {
+      return fromUser.coinsBalance;
+    }
+
+    const paidUse = await tx.user.updateMany({
+      where: { id: fromUserId, coinsBalance: { gte: SUPER_LIKE_COST } },
+      data: { coinsBalance: { decrement: SUPER_LIKE_COST } },
+    });
+    if (paidUse.count === 0) {
+      throw new BadRequestException('Saldo insuficiente para enviar un Cuyazo');
+    }
+
+    const updated = await tx.user.findUnique({
+      where: { id: fromUserId },
+      select: { coinsBalance: true },
+    });
+    return updated?.coinsBalance ?? fromUser.coinsBalance - SUPER_LIKE_COST;
   }
 
   private async ensureMatch(

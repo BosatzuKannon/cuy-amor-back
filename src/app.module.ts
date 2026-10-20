@@ -16,6 +16,7 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UserModule } from './users/users.module';
+import { VerificationsModule } from './verifications/verifications.module';
 import { WalletModule } from './wallet/wallet.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { WalletModule } from './wallet/wallet.module';
     TransactionsModule,
     PayoutsModule,
     WalletModule,
+    VerificationsModule,
     KeepAliveModule,
     SystemConfigModule,
   ],

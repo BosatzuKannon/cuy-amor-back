@@ -39,6 +39,8 @@ const EARTH_RADIUS_KM = 6371;
 const STREAK_TIME_ZONE = 'America/Bogota';
 const STREAK_LOOP_DAYS = 7;
 const HOURS_MS = 60 * 60 * 1000;
+const LEYENDA_DAILY_ZUMBIDOS = 3;
+const LEYENDA_DAILY_CUYAZOS = 1;
 
 type StreakLoopReward = {
   coins?: number;
@@ -395,6 +397,7 @@ export class UserService {
           lastStreakClaimDate: true,
           coinsBalance: true,
           dailyZumbidosLeft: true,
+          dailyCuyazosLeft: true,
           isNinja: true,
           ninjaExpiresAt: true,
           isLeyenda: true,
@@ -406,7 +409,8 @@ export class UserService {
         throw new NotFoundException('El usuario no existe');
       }
 
-      const today = bogotaDayNumber(new Date());
+      const now = new Date();
+      const today = bogotaDayNumber(now);
       const lastClaim = user.lastStreakClaimDate
         ? bogotaDayNumber(user.lastStreakClaimDate)
         : null;
@@ -427,6 +431,7 @@ export class UserService {
           },
           coinsBalance: user.coinsBalance,
           dailyZumbidosLeft: user.dailyZumbidosLeft,
+          dailyCuyazosLeft: user.dailyCuyazosLeft,
           isNinja: user.isNinja,
           isLeyenda: user.isLeyenda,
         };
@@ -453,11 +458,10 @@ export class UserService {
         items.push(milestone.label);
       }
 
-      const now = Date.now();
       const data: Prisma.UserUpdateInput = {
         currentStreak,
         longestStreak: Math.max(user.longestStreak, currentStreak),
-        lastStreakClaimDate: new Date(),
+        lastStreakClaimDate: now,
       };
 
       if (coins > 0) {
@@ -469,32 +473,80 @@ export class UserService {
       if (ninjaHours > 0) {
         const base =
           user.isNinja && user.ninjaExpiresAt
-            ? Math.max(user.ninjaExpiresAt.getTime(), now)
-            : now;
+            ? Math.max(user.ninjaExpiresAt.getTime(), now.getTime())
+            : now.getTime();
         data.isNinja = true;
         data.ninjaExpiresAt = new Date(base + ninjaHours * HOURS_MS);
       }
       if (leyendaHours > 0) {
         const base =
           user.isLeyenda && user.leyendaExpiresAt
-            ? Math.max(user.leyendaExpiresAt.getTime(), now)
-            : now;
+            ? Math.max(user.leyendaExpiresAt.getTime(), now.getTime())
+            : now.getTime();
         data.isLeyenda = true;
         data.leyendaExpiresAt = new Date(base + leyendaHours * HOURS_MS);
+        // Activar los perks diarios de Leyenda de inmediato (el cron de
+        // mediano noche no los otorga hasta el siguiente reinicio).
+        data.dailyZumbidosLeft = Math.max(
+          user.dailyZumbidosLeft + zumbidos,
+          LEYENDA_DAILY_ZUMBIDOS,
+        );
+        data.dailyCuyazosLeft = Math.max(
+          user.dailyCuyazosLeft,
+          LEYENDA_DAILY_CUYAZOS,
+        );
       }
 
-      const updated = await tx.user.update({
-        where: { id: userId },
-        data,
-        select: {
-          currentStreak: true,
-          longestStreak: true,
-          coinsBalance: true,
-          dailyZumbidosLeft: true,
-          isNinja: true,
-          isLeyenda: true,
+      // Guardia atómica: solo aplica si nadie reclamó hoy aún (evita
+      // doble reclamo concurrente por el mismo usuario).
+      const bogotaStartOfToday = new Date(today * MS_PER_DAY);
+      const claimResult = await tx.user.updateMany({
+        where: {
+          id: userId,
+          OR: [
+            { lastStreakClaimDate: null },
+            { lastStreakClaimDate: { lt: bogotaStartOfToday } },
+          ],
         },
+        data,
       });
+
+      if (claimResult.count === 0) {
+        const fresh = await tx.user.findUnique({
+          where: { id: userId },
+          select: {
+            currentStreak: true,
+            longestStreak: true,
+            coinsBalance: true,
+            dailyZumbidosLeft: true,
+            dailyCuyazosLeft: true,
+            isNinja: true,
+            isLeyenda: true,
+          },
+        });
+        if (!fresh) {
+          throw new NotFoundException('El usuario no existe');
+        }
+        return {
+          claimed: false,
+          currentStreak: fresh.currentStreak,
+          longestStreak: fresh.longestStreak,
+          loopDay:
+            fresh.currentStreak > 0 ? streakLoopDay(fresh.currentStreak) : 0,
+          rewards: {
+            coins: 0,
+            zumbidos: 0,
+            ninjaHours: 0,
+            leyendaHours: 0,
+            items: [],
+          },
+          coinsBalance: fresh.coinsBalance,
+          dailyZumbidosLeft: fresh.dailyZumbidosLeft,
+          dailyCuyazosLeft: fresh.dailyCuyazosLeft,
+          isNinja: fresh.isNinja,
+          isLeyenda: fresh.isLeyenda,
+        };
+      }
 
       if (coins > 0) {
         await tx.transaction.create({
@@ -509,6 +561,22 @@ export class UserService {
         });
       }
 
+      const updated = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          currentStreak: true,
+          longestStreak: true,
+          coinsBalance: true,
+          dailyZumbidosLeft: true,
+          dailyCuyazosLeft: true,
+          isNinja: true,
+          isLeyenda: true,
+        },
+      });
+      if (!updated) {
+        throw new NotFoundException('El usuario no existe');
+      }
+
       return {
         claimed: true,
         currentStreak: updated.currentStreak,
@@ -517,6 +585,7 @@ export class UserService {
         rewards: { coins, zumbidos, ninjaHours, leyendaHours, items },
         coinsBalance: updated.coinsBalance,
         dailyZumbidosLeft: updated.dailyZumbidosLeft,
+        dailyCuyazosLeft: updated.dailyCuyazosLeft,
         isNinja: updated.isNinja,
         isLeyenda: updated.isLeyenda,
       };

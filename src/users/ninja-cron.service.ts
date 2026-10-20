@@ -33,7 +33,10 @@ export class NinjaCronService {
     }
   }
 
-  @Cron('0 0 * * *', { timeZone: 'America/Bogota' })
+  // Hourly (not only at midnight): a Leyenda granted by the streak lasts
+  // hours, so expiry must be honored within the same day — otherwise the
+  // user keeps free cuyazos/zumbidos for up to ~24 extra hours.
+  @Cron(CronExpression.EVERY_HOUR)
   async deactivateExpiredLeyenda() {
     try {
       const result = await this.prisma.user.updateMany({
@@ -44,7 +47,7 @@ export class NinjaCronService {
         data: {
           isLeyenda: false,
           leyendaExpiresAt: null,
-          dailyZumbidosLeft: 0,
+          dailyZumbidosLeft: 1,
           dailyCuyazosLeft: 0,
         },
       });
