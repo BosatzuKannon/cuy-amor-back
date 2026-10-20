@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { Prisma } from '@prisma/client';
+import { MessageType, Prisma } from '@prisma/client';
 
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,6 +37,9 @@ export class MatchesService {
   private readonly messageSelect = {
     id: true,
     content: true,
+    type: true,
+    mediaUrl: true,
+    mediaDurationMs: true,
     isRead: true,
     isPriority: true,
     isSystemMessage: true,
@@ -89,6 +92,7 @@ export class MatchesService {
           select: {
             id: true,
             content: true,
+            type: true,
             createdAt: true,
             isRead: true,
             senderId: true,
@@ -173,6 +177,11 @@ export class MatchesService {
     userId: string,
     content: string,
     replyToId?: string,
+    media?: {
+      type?: MessageType;
+      mediaUrl?: string;
+      mediaDurationMs?: number;
+    },
   ) {
     const match = await this.prisma.match.findFirst({
       where: {
@@ -196,12 +205,40 @@ export class MatchesService {
       }
     }
 
+    const mediaType =
+      media?.type && media.type !== MessageType.TEXT
+        ? media.type
+        : MessageType.TEXT;
+    const mediaUrl = media?.mediaUrl ?? null;
+    const mediaDurationMs = media?.mediaDurationMs ?? null;
+
+    if (mediaType !== MessageType.TEXT && !mediaUrl) {
+      throw new BadRequestException(
+        'Los mensajes con multimedia requieren mediaUrl',
+      );
+    }
+
+    let normalizedContent = content;
+    if (mediaType === MessageType.IMAGE) {
+      normalizedContent = '📷 Foto';
+    } else if (mediaType === MessageType.AUDIO) {
+      const seconds = mediaDurationMs
+        ? Math.max(1, Math.round(mediaDurationMs / 1000))
+        : null;
+      normalizedContent = seconds
+        ? `🎤 Nota de voz (${seconds}s)`
+        : '🎤 Nota de voz';
+    }
+
     const recipientId =
       match.user1Id === userId ? match.user2Id : match.user1Id;
 
     const message = await this.prisma.message.create({
       data: {
-        content,
+        content: normalizedContent,
+        type: mediaType,
+        mediaUrl,
+        mediaDurationMs,
         matchId,
         senderId: userId,
         recipientId,

@@ -52,6 +52,11 @@ export class MatchesController {
       user.userId,
       dto.content,
       dto.replyToId,
+      {
+        type: dto.type,
+        mediaUrl: dto.mediaUrl,
+        mediaDurationMs: dto.mediaDurationMs,
+      },
     );
   }
 
