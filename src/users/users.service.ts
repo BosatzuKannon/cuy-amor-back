@@ -18,6 +18,10 @@ import { RegisterDeviceDto } from './dto/register-device.dto';
 import { ReportUserDto } from './dto/block-report.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { EditPhotoDto, EditProfileDto } from './dto/edit-profile.dto';
+import {
+  PROFILE_PROMPTS_MAX_COUNT,
+  ProfilePromptDto,
+} from './dto/profile-prompts.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 const MAX_PHOTOS = 3;
@@ -309,6 +313,13 @@ export class UserService {
             relationshipGoal: dto.relationshipGoal,
             hobbies: dto.hobbies ?? undefined,
             bio: dto.bio,
+            ...(dto.profilePrompts !== undefined
+              ? {
+                  profilePrompts: this.normalizeProfilePrompts(
+                    dto.profilePrompts,
+                  ),
+                }
+              : {}),
             city: dto.city ?? 'Pasto',
             latitude: dto.latitude,
             longitude: dto.longitude,
@@ -1016,6 +1027,11 @@ export class UserService {
     if (dto.bio !== undefined) {
       userUpdate.bio = dto.bio;
     }
+    if (dto.profilePrompts !== undefined) {
+      userUpdate.profilePrompts = this.normalizeProfilePrompts(
+        dto.profilePrompts,
+      );
+    }
     if (dto.city !== undefined) {
       userUpdate.city = dto.city;
     }
@@ -1319,6 +1335,7 @@ export class UserService {
         relationshipGoal: true,
         interestedIn: true,
         hobbies: true,
+        profilePrompts: true,
         isLeyenda: true,
         latitude: true,
         longitude: true,
@@ -1368,6 +1385,7 @@ export class UserService {
       relationshipGoal: candidate.relationshipGoal,
       interestedIn: candidate.interestedIn,
       hobbies: candidate.hobbies,
+      profilePrompts: this.readProfilePrompts(candidate.profilePrompts),
       isLeyenda: candidate.isLeyenda,
       isHighlyRequested:
         candidate._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
@@ -1406,6 +1424,7 @@ export class UserService {
         relationshipGoal: true,
         interestedIn: true,
         hobbies: true,
+        profilePrompts: true,
         isLeyenda: true,
         latitude: true,
         longitude: true,
@@ -1464,6 +1483,7 @@ export class UserService {
       relationshipGoal: target.relationshipGoal,
       interestedIn: target.interestedIn,
       hobbies: target.hobbies,
+      profilePrompts: this.readProfilePrompts(target.profilePrompts),
       isLeyenda: target.isLeyenda,
       isHighlyRequested:
         target._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
@@ -1580,6 +1600,37 @@ export class UserService {
     }
   }
 
+  private normalizeProfilePrompts(
+    prompts: ProfilePromptDto[],
+  ): Prisma.InputJsonValue {
+    const cleaned = prompts
+      .map((prompt) => ({
+        id: prompt.id.trim(),
+        answer: prompt.answer.trim(),
+      }))
+      .filter((prompt) => prompt.id.length > 0 && prompt.answer.length > 0)
+      .slice(0, PROFILE_PROMPTS_MAX_COUNT);
+    return cleaned;
+  }
+
+  private readProfilePrompts(
+    value: Prisma.JsonValue | null | undefined,
+  ): { id: string; answer: string }[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .filter(
+        (item): item is { id: string; answer: string } =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as { id?: unknown }).id === 'string' &&
+          typeof (item as { answer?: unknown }).answer === 'string',
+      )
+      .map((item) => ({ id: item.id, answer: item.answer }))
+      .slice(0, PROFILE_PROMPTS_MAX_COUNT);
+  }
+
   private serializeProfile(user: UserWithRelations) {
     const photos = (user.photos ?? []).slice(0, MAX_PHOTOS);
     const now = Date.now();
@@ -1607,6 +1658,7 @@ export class UserService {
       relationshipGoal: user.relationshipGoal,
       hobbies: user.hobbies,
       bio: user.bio,
+      profilePrompts: this.readProfilePrompts(user.profilePrompts),
       city: user.city,
       latitude: user.latitude,
       longitude: user.longitude,

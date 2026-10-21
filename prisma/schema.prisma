@@ -83,6 +83,7 @@ model User {
   relationshipGoal   RelationshipGoal?
   hobbies            String[]          @default([])
   bio                String?
+  profilePrompts     Json?
   city               String?           @default("Pasto")
   latitude           Float?
   longitude          Float?

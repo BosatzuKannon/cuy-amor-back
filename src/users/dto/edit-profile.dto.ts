@@ -20,6 +20,7 @@ import {
 import { Gender, InterestedIn, RelationshipGoal } from '@prisma/client';
 
 import { IsMinimumAge } from '../../common/validators/is-minimum-age';
+import { ProfilePromptsDto } from './profile-prompts.dto';
 
 const MIN_AGE = 18;
 const BIO_MAX_LENGTH = 500;
@@ -91,7 +92,7 @@ export class EditPhotoDto {
   isProfile?: boolean;
 }
 
-export class EditProfileDto {
+export class EditProfileDto extends ProfilePromptsDto {
   @IsOptional()
   @IsString()
   @MaxLength(80)

@@ -125,7 +125,7 @@ export class InteractionsService {
     if (result.isMatch && matchedNow) {
       this.notifyNewMatch(fromUserId, toUserId);
     } else if (!result.isMatch) {
-      void this.notifyNewLike(toUserId);
+      void this.notifyNewLike(toUserId, fromUserId);
     }
 
     return result;
@@ -291,6 +291,7 @@ export class InteractionsService {
               relationshipGoal: true,
               interestedIn: true,
               hobbies: true,
+              profilePrompts: true,
               isLeyenda: true,
               latitude: true,
               longitude: true,
@@ -352,6 +353,7 @@ export class InteractionsService {
           relationshipGoal: liker.relationshipGoal,
           interestedIn: liker.interestedIn,
           hobbies: liker.hobbies,
+          profilePrompts: this.readProfilePrompts(liker.profilePrompts),
           isLeyenda: liker.isLeyenda,
           isHighlyRequested:
             liker._count.receivedInteractions >= HIGHLY_REQUESTED_THRESHOLD,
@@ -460,7 +462,7 @@ export class InteractionsService {
         result.type === InteractionType.SUPER_LIKE) &&
       !result.isMatch
     ) {
-      void this.notifyNewLike(targetUserId);
+      void this.notifyNewLike(targetUserId, userId);
     }
 
     return result;
@@ -556,7 +558,10 @@ export class InteractionsService {
       .catch(() => {});
   }
 
-  private async notifyNewLike(toUserId: string): Promise<void> {
+  private async notifyNewLike(
+    toUserId: string,
+    fromUserId: string,
+  ): Promise<void> {
     try {
       const preference = await this.prisma.userPreference.findUnique({
         where: { userId: toUserId },
@@ -566,15 +571,97 @@ export class InteractionsService {
         return;
       }
 
+      const [recipient, sender] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: toUserId },
+          select: { latitude: true, longitude: true, city: true },
+        }),
+        this.prisma.user.findUnique({
+          where: { id: fromUserId },
+          select: {
+            latitude: true,
+            longitude: true,
+            city: true,
+            hobbies: true,
+          },
+        }),
+      ]);
+
+      const teaser = this.buildLikeTeaser(recipient, sender);
+
       await this.notifications.sendPushNotification(
         toUserId,
-        '¡Alguien te ha echado el ojo! 👀',
-        'Tienes un nuevo pretendiente. ¡Descúbrelo!',
-        { url: 'cuyamor://who-likes-you' },
+        'Alguien te echó el ojo 👀',
+        teaser,
+        { url: 'cuyamor://who-likes-you', type: 'NEW_LIKE' },
       );
     } catch {
       // Notification failures must never break the interaction flow.
     }
+  }
+
+  /**
+   * Zeigarnik hook: deja la frase a medias para forzar la curiosidad
+   * (loop abierto). Nunca revela quién es; solo da un señuelo tentador.
+   */
+  private buildLikeTeaser(
+    recipient: {
+      latitude: number | null;
+      longitude: number | null;
+      city: string | null;
+    } | null,
+    sender: {
+      latitude: number | null;
+      longitude: number | null;
+      city: string | null;
+      hobbies: string[];
+    } | null,
+  ): string {
+    if (
+      recipient?.latitude != null &&
+      recipient.longitude != null &&
+      sender?.latitude != null &&
+      sender.longitude != null
+    ) {
+      const km = this.haversineKm(
+        recipient.latitude,
+        recipient.longitude,
+        sender.latitude,
+        sender.longitude,
+      );
+      const rounded = km < 1 ? 1 : Math.round(km);
+      return `A alguien a ${rounded} km le encantó tu perfil… ¿adivinas quién?`;
+    }
+
+    const hobby = sender?.hobbies.find((item) => item.trim().length > 0);
+    if (hobby) {
+      return `Una persona a la que le encanta ${hobby} te puso el ojo… descúbrela 🔥`;
+    }
+
+    const city = sender?.city?.trim();
+    if (city) {
+      return `Alguien de ${city} se fijó en ti… ¿te atreves a ver quién?`;
+    }
+
+    return 'Alguien se fijó en ti y aún no lo sabes… ¿descubres quién?';
+  }
+
+  private readProfilePrompts(
+    value: Prisma.JsonValue | null | undefined,
+  ): { id: string; answer: string }[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .filter(
+        (item): item is { id: string; answer: string } =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as { id?: unknown }).id === 'string' &&
+          typeof (item as { answer?: unknown }).answer === 'string',
+      )
+      .map((item) => ({ id: item.id, answer: item.answer }))
+      .slice(0, 3);
   }
 
   private haversineKm(

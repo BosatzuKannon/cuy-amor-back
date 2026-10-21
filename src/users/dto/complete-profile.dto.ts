@@ -13,6 +13,7 @@ import {
 
 import { IsMinimumAge } from '../../common/validators/is-minimum-age';
 import { Gender, InterestedIn, RelationshipGoal } from '@prisma/client';
+import { ProfilePromptsDto } from './profile-prompts.dto';
 
 const MIN_AGE = 18;
 const BIO_MAX_LENGTH = 500;
@@ -20,7 +21,7 @@ const DEFAULT_CITY = 'Pasto';
 const HOBBIES_MAX_COUNT = 12;
 const HOBBY_MAX_LENGTH = 32;
 
-export class CompleteProfileDto {
+export class CompleteProfileDto extends ProfilePromptsDto {
   @IsOptional()
   @IsISO8601()
   @IsMinimumAge(MIN_AGE, {
