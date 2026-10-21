@@ -47,6 +47,14 @@ const LEYENDA_DAILY_ZUMBIDOS = 3;
 const LEYENDA_DAILY_CUYAZOS = 1;
 const LEYENDA_DAILY_AI = 10;
 
+/**
+ * Los `profilePrompts` se volvieron obligatorios en el onboarding con el
+ * lanzamiento de los prompts de perfil. Los usuarios creados antes de esta
+ * fecha son "legados": su perfil se considera completo sin necesidad de
+ * responder prompts, de lo contrario quedan atrapados en el onboarding.
+ */
+const PROFILE_PROMPTS_REQUIRED_SINCE = new Date('2026-10-20T00:00:00.000Z');
+
 type StreakLoopReward = {
   coins?: number;
   zumbidos?: number;
@@ -1631,8 +1639,20 @@ export class UserService {
       .slice(0, PROFILE_PROMPTS_MAX_COUNT);
   }
 
+  /**
+   * Los usuarios creados antes del lanzamiento de los prompts de perfil
+   * (usuarios legados) no están obligados a responderlos.
+   */
+  private requiresProfilePrompts(user: { createdAt: Date }): boolean {
+    return (
+      user.createdAt.getTime() >= PROFILE_PROMPTS_REQUIRED_SINCE.getTime()
+    );
+  }
+
   private serializeProfile(user: UserWithRelations) {
     const photos = (user.photos ?? []).slice(0, MAX_PHOTOS);
+    const profilePrompts = this.readProfilePrompts(user.profilePrompts);
+    const requiresProfilePrompts = this.requiresProfilePrompts(user);
     const now = Date.now();
     const ninjaDaysLeft =
       user.isNinja && user.ninjaExpiresAt
@@ -1658,7 +1678,13 @@ export class UserService {
       relationshipGoal: user.relationshipGoal,
       hobbies: user.hobbies,
       bio: user.bio,
-      profilePrompts: this.readProfilePrompts(user.profilePrompts),
+      profilePrompts,
+      requiresProfilePrompts,
+      profileComplete:
+        !!user.birthDate &&
+        !!user.gender &&
+        photos.length > 0 &&
+        (!requiresProfilePrompts || profilePrompts.length > 0),
       city: user.city,
       latitude: user.latitude,
       longitude: user.longitude,
