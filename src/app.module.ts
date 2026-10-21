@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CoinPackagesModule } from './coin-packages/coin-packages.module';
 import { GiftsModule } from './gifts/gifts.module';
@@ -28,6 +29,7 @@ import { WalletModule } from './wallet/wallet.module';
     PrismaModule,
     AuthModule,
     UserModule,
+    AiModule,
     InteractionsModule,
     MatchesModule,
     NotificationsModule,

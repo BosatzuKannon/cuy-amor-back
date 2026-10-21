@@ -139,6 +139,7 @@ export class WompiService {
             coinsBalance: { increment: 100 },
             dailyZumbidosLeft: 3,
             dailyCuyazosLeft: 1,
+            dailyAiLeft: 10,
           },
         });
       } else if (coinsAmount !== null && coinsAmount > 0) {

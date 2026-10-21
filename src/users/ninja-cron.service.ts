@@ -49,6 +49,7 @@ export class NinjaCronService {
           leyendaExpiresAt: null,
           dailyZumbidosLeft: 1,
           dailyCuyazosLeft: 0,
+          dailyAiLeft: 1,
         },
       });
 
@@ -70,12 +71,12 @@ export class NinjaCronService {
     try {
       const standardUsers = await this.prisma.user.updateMany({
         where: { isLeyenda: false },
-        data: { dailyZumbidosLeft: 1, dailyCuyazosLeft: 0 },
+        data: { dailyZumbidosLeft: 1, dailyCuyazosLeft: 0, dailyAiLeft: 1 },
       });
 
       const leyendaUsers = await this.prisma.user.updateMany({
         where: { isLeyenda: true },
-        data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 1 },
+        data: { dailyZumbidosLeft: 3, dailyCuyazosLeft: 1, dailyAiLeft: 10 },
       });
 
       if (standardUsers.count > 0 || leyendaUsers.count > 0) {

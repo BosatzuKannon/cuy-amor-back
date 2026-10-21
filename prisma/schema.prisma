@@ -96,6 +96,7 @@ model User {
   leyendaExpiresAt   DateTime?
   dailyZumbidosLeft  Int               @default(0)
   dailyCuyazosLeft   Int               @default(0)
+  dailyAiLeft        Int               @default(0)
   currentStreak      Int               @default(0)
   longestStreak      Int               @default(0)
   lastStreakClaimDate DateTime?

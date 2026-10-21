@@ -41,6 +41,7 @@ const STREAK_LOOP_DAYS = 7;
 const HOURS_MS = 60 * 60 * 1000;
 const LEYENDA_DAILY_ZUMBIDOS = 3;
 const LEYENDA_DAILY_CUYAZOS = 1;
+const LEYENDA_DAILY_AI = 10;
 
 type StreakLoopReward = {
   coins?: number;
@@ -368,6 +369,7 @@ export class UserService {
     coinsBalance: number;
     dailyZumbidosLeft: number;
     dailyCuyazosLeft: number;
+    dailyAiLeft: number;
   }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -375,6 +377,7 @@ export class UserService {
         coinsBalance: true,
         dailyZumbidosLeft: true,
         dailyCuyazosLeft: true,
+        dailyAiLeft: true,
       },
     });
     if (!user) {
@@ -384,6 +387,7 @@ export class UserService {
       coinsBalance: user.coinsBalance,
       dailyZumbidosLeft: user.dailyZumbidosLeft,
       dailyCuyazosLeft: user.dailyCuyazosLeft,
+      dailyAiLeft: user.dailyAiLeft,
     };
   }
 
@@ -398,6 +402,7 @@ export class UserService {
           coinsBalance: true,
           dailyZumbidosLeft: true,
           dailyCuyazosLeft: true,
+          dailyAiLeft: true,
           isNinja: true,
           ninjaExpiresAt: true,
           isLeyenda: true,
@@ -495,6 +500,7 @@ export class UserService {
           user.dailyCuyazosLeft,
           LEYENDA_DAILY_CUYAZOS,
         );
+        data.dailyAiLeft = Math.max(user.dailyAiLeft, LEYENDA_DAILY_AI);
       }
 
       // Guardia atómica: solo aplica si nadie reclamó hoy aún (evita
@@ -520,6 +526,7 @@ export class UserService {
             coinsBalance: true,
             dailyZumbidosLeft: true,
             dailyCuyazosLeft: true,
+            dailyAiLeft: true,
             isNinja: true,
             isLeyenda: true,
           },
@@ -543,6 +550,7 @@ export class UserService {
           coinsBalance: fresh.coinsBalance,
           dailyZumbidosLeft: fresh.dailyZumbidosLeft,
           dailyCuyazosLeft: fresh.dailyCuyazosLeft,
+          dailyAiLeft: fresh.dailyAiLeft,
           isNinja: fresh.isNinja,
           isLeyenda: fresh.isLeyenda,
         };
@@ -569,6 +577,7 @@ export class UserService {
           coinsBalance: true,
           dailyZumbidosLeft: true,
           dailyCuyazosLeft: true,
+          dailyAiLeft: true,
           isNinja: true,
           isLeyenda: true,
         },
@@ -586,6 +595,7 @@ export class UserService {
         coinsBalance: updated.coinsBalance,
         dailyZumbidosLeft: updated.dailyZumbidosLeft,
         dailyCuyazosLeft: updated.dailyCuyazosLeft,
+        dailyAiLeft: updated.dailyAiLeft,
         isNinja: updated.isNinja,
         isLeyenda: updated.isLeyenda,
       };
@@ -870,6 +880,7 @@ export class UserService {
           coinsBalance: { increment: 100 },
           dailyZumbidosLeft: 3,
           dailyCuyazosLeft: 1,
+          dailyAiLeft: LEYENDA_DAILY_AI,
         },
         select: {
           isLeyenda: true,
@@ -877,6 +888,7 @@ export class UserService {
           coinsBalance: true,
           dailyZumbidosLeft: true,
           dailyCuyazosLeft: true,
+          dailyAiLeft: true,
         },
       });
 
@@ -1608,6 +1620,7 @@ export class UserService {
       leyendaDaysLeft,
       dailyZumbidosLeft: user.dailyZumbidosLeft,
       dailyCuyazosLeft: user.dailyCuyazosLeft,
+      dailyAiLeft: user.dailyAiLeft,
       currentStreak: user.currentStreak,
       longestStreak: user.longestStreak,
       ninjaDaysLeft,
