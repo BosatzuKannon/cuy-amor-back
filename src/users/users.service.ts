@@ -190,51 +190,46 @@ export class UserService {
       if (email && existing.email !== email) {
         data.email = email;
       }
-      if (dto.firstName && existing.firstName !== dto.firstName) {
-        data.firstName = dto.firstName;
-      }
-      if (dto.lastName && dto.lastName !== (existing.lastName ?? '')) {
-        data.lastName = dto.lastName;
+
+      if (Object.keys(data).length > 0) {
+        await this.prisma.user.update({
+          where: { id: authUser.userId },
+          data,
+        });
       }
 
-      const inviteCode = (dto.invitedByCode ?? dto.referredBy)?.trim();
-      let linkedReferrerId: string | null = null;
-      if (inviteCode && !existing.referredById) {
-        const referrer = await this.prisma.user.findUnique({
-          where: { referralCode: inviteCode.toUpperCase() },
-          select: { id: true },
-        });
-        if (referrer) {
-          linkedReferrerId = referrer.id;
-          data.referredBy = { connect: { id: referrer.id } };
+      if (dto.referredBy) {
+        try {
+          const inviteCode = dto.referredBy.trim().toUpperCase();
+          const referrer = await this.prisma.user.findUnique({
+            where: { referralCode: inviteCode },
+            select: { id: true },
+          });
+          if (referrer && referrer.id !== authUser.userId) {
+            const user = await this.prisma.user.findUnique({
+              where: { id: authUser.userId },
+              select: { referredById: true },
+            });
+            if (!user?.referredById) {
+              await this.prisma.$transaction(async (tx) => {
+                await tx.user.update({
+                  where: { id: authUser.userId },
+                  data: { referredById: referrer.id },
+                });
+                await this.attributeWelcomeGiftToReferral(
+                  tx,
+                  authUser.userId,
+                  referrer.id,
+                );
+              });
+            }
+          }
+        } catch {
+          // ignore referral errors
         }
       }
 
-      if (Object.keys(data).length === 0) {
-        return existing;
-      }
-
-      try {
-        const updated = await this.prisma.$transaction(async (tx) => {
-          const synced = await tx.user.update({
-            where: { id: authUser.userId },
-            data,
-          });
-
-          if (linkedReferrerId && !existing.referredById) {
-            await this.attributeWelcomeGiftToReferral(
-              tx,
-              authUser.userId,
-              linkedReferrerId,
-            );
-          }
-
-          return synced;
-        });
-        return { ...existing, ...updated };
-      } catch (error) {
-        this.handlePrismaError(error, 'No se pudo sincronizar el usuario');
-      }
+      return this.getOrCreateUser(authUser);
     }
 
     const fullName = [dto.firstName, dto.lastName]
@@ -1644,9 +1639,7 @@ export class UserService {
    * (usuarios legados) no están obligados a responderlos.
    */
   private requiresProfilePrompts(user: { createdAt: Date }): boolean {
-    return (
-      user.createdAt.getTime() >= PROFILE_PROMPTS_REQUIRED_SINCE.getTime()
-    );
+    return user.createdAt.getTime() >= PROFILE_PROMPTS_REQUIRED_SINCE.getTime();
   }
 
   private serializeProfile(user: UserWithRelations) {
